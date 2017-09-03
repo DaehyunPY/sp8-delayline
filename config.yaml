@@ -1,0 +1,83 @@
+filenames:
+- '/Users/daehyun/Downloads/ResortLess0001.root'
+treename: resortedData
+
+ion:
+  nlimit: 4
+  image_transformer:
+    # will be merged with transformers of each hit
+    # (rot(th) * (x,y) - (x0,y0)) * (dx,dy) + (x1,y1)
+    th: 0
+    x0: 18897261.25042418
+    y0: -37794522.50084836
+    dx: 1.3
+    dy: 1.3
+  image_transformers_of_each_hit:
+  - x1: 0
+    y1: 0
+  t0: -16636388757.930672
+
+  global_filter:
+    # will exclude data from raw data
+    x: [-.inf, .inf]
+    y: [-.inf, .inf]
+    t: [0, 413413733532.0669]
+    flag: [0, 14]
+  master_filters_of_each_hit:
+    # only data in the region will be calculated momentum
+  - t: [72347403368.11171, 99219296047.69606]
+  - t: [95085158712.37538, 140560669400.90274]
+
+  magnetic_filed: 3.579807476997616e-09
+  accelerators_of_each_region:
+  - electric_filed: 3.3393674646024289e-09
+    length: 311804810.631999
+  - electric_filed: 4.0425989659716462e-08
+    length: 1559024053.159995
+  particles_of_each_hit:
+  - mass: 25533.19900618694
+    charge: 1
+  - mass: 25533.19900618694
+    charge: 1
+
+  momentum_filter:
+  momentum_filters_each_hit:
+
+electron:
+  nlimit: 4
+  image_transformer:
+    # will be merged with transformers of each hit
+    # (rot(th) * (x,y) - (x0,y0)) * (dx,dy) + (x1,y1)
+    th: 0.5235987755982988
+    x0: 9448630.62521209
+    y0: -9448630.62521209
+    dx: 1.64
+    dy: 1.63
+  affine_transform_each_hit:
+  - x1: 0
+    y1: 0
+  t0: -13417808597.719547
+
+  global_filter:
+    # will exclude data from raw data
+    x: [-.inf, .inf]
+    y: [-.inf, .inf]
+    t: [0, 3307309868.256535]
+    flag: [0, 14]
+  master_filters_of_each_hit:
+    # only data in the region will be calculated momentum
+    # first hit
+  - t: [620120600.2981004, 1240241200.5962007]
+
+  magnetic_filed: 3.579807476997616e-09
+  accelerators_of_each_region:
+  - electric_filed: -3.3393674646024289e-09
+    length: 623609621.263998
+  - electric_filed: 0
+    length: 1273675408.2785897
+  particles_of_each_hit:
+  - mass: 1
+    charge: -1
+
+  momentum_filter:
+  momentum_filters_each_hit:
