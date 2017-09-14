@@ -1,83 +1,73 @@
-filenames:
-- '/Users/daehyun/Downloads/ResortLess0001.root'
-treename: resortedData
+events:
+  filenames:
+    - test.root
+  treename: resortedData
+  limit_of_hits: 8
+
+spectrometer:
+  #   Ion2nd                 Ion1st       Electron
+  # ┌───┐│                      │             │                    │┌───┐
+  # │   ││                      │             │                    ││   │
+  # │   ││                      │             │                    ││   │
+  # │   ││                      │             │                    ││Ele│
+  # │Ion││                      │             │                    ││ctr│
+  # │MCP││        AccReg        │   SepReg    │      DraftReg      ││on │
+  # │   ││                      │             │                    ││MCP│
+  # │   ││                      │             │                    ││   │
+  # │   ││                      │────X────────│                    ││   │
+  # │   ││                      │LReg     DReg│                    ││   │
+  # └───┘│                      │             │                    │└───┘
+  #
+  #                        uniform magnetic field
+  #                       symbol X: reaction point
+  length_of_GepReg: 10.0 mm  # between 'IonMCP' and 'AccReg'
+  length_of_AccReg: 82.5 mm
+  length_of_LReg: 16.5 mm  # between 'Ion1st' and 'X'
+  length_of_DReg: 33.0 mm  # between 'X' and 'Electron'
+  length_of_DraftReg: 67.4 mm
+  electric_potential_of_IonMCP: -3590 V
+  electric_potential_of_Ion2nd: -2000 V
+  electric_potential_of_Ion1nd: -350 V
+  electric_potential_of_Electron: -200 V
+  uniform_magnetic_field: 8.35 G
 
 ion:
-  nlimit: 4
-  image_transformer:
-    # will be merged with transformers of each hit
-    # (rot(th) * (x,y) - (x0,y0)) * (dx,dy) + (x1,y1)
-    th: 0
-    x0: 18897261.25042418
-    y0: -37794522.50084836
-    dx: 1.3
-    dy: 1.3
-  image_transformers_of_each_hit:
-  - x1: 0
-    y1: 0
-  t0: -16636388757.930672
-
-  global_filter:
-    # will exclude data from raw data
-    x: [-.inf, .inf]
-    y: [-.inf, .inf]
-    t: [0, 413413733532.0669]
-    flag: [0, 14]
-  master_filters_of_each_hit:
-    # only data in the region will be calculated momentum
-  - t: [72347403368.11171, 99219296047.69606]
-  - t: [95085158712.37538, 140560669400.90274]
-
-  magnetic_filed: 3.579807476997616e-09
-  accelerators_of_each_region:
-  - electric_filed: 3.3393674646024289e-09
-    length: 311804810.631999
-  - electric_filed: 4.0425989659716462e-08
-    length: 1559024053.159995
-  particles_of_each_hit:
-  - mass: 25533.19900618694
-    charge: 1
-  - mass: 25533.19900618694
-    charge: 1
-
-  momentum_filter:
-  momentum_filters_each_hit:
+  # ((x,y) * rot(th) - (x0,y0)) * (dx,dy) + (x1,y1)
+  axis_angle_of_detector: 0 deg  # th
+  dead_time: 10000 ns
+  dead_flag: 14  # bigger than the value is dead
+  time_zero_of_flight_time: -290.1025 ns
+  x_zero_of_image: 1 mm  # x0
+  y_zero_of_image: -1.6 mm  # y0
+  pixel_size_of_x: 1.22  # dx
+  pixel_size_of_y: 1.22  # dy
+ions:
+  # first hit
+  - mass: 14.007 u
+    charge: 1 au
+    x_shift: 0 mm  # x1
+    y_shift: 0 mm  # y1
+    flight_time_from: 1700 ns
+    flight_time_to: 2300 ns
+  # second hit
+  - mass: 14.007 u
+    charge: 1 au
+    x_shift: 0 mm  # x1
+    y_shift: 0 mm  # y1
+    flight_time_from: 2200 ns
+    flight_time_to: 3000 ns
 
 electron:
-  nlimit: 4
-  image_transformer:
-    # will be merged with transformers of each hit
-    # (rot(th) * (x,y) - (x0,y0)) * (dx,dy) + (x1,y1)
-    th: 0.5235987755982988
-    x0: 9448630.62521209
-    y0: -9448630.62521209
-    dx: 1.64
-    dy: 1.63
-  affine_transform_each_hit:
-  - x1: 0
-    y1: 0
-  t0: -13417808597.719547
-
-  global_filter:
-    # will exclude data from raw data
-    x: [-.inf, .inf]
-    y: [-.inf, .inf]
-    t: [0, 3307309868.256535]
-    flag: [0, 14]
-  master_filters_of_each_hit:
-    # only data in the region will be calculated momentum
-    # first hit
-  - t: [620120600.2981004, 1240241200.5962007]
-
-  magnetic_filed: 3.579807476997616e-09
-  accelerators_of_each_region:
-  - electric_filed: -3.3393674646024289e-09
-    length: 623609621.263998
-  - electric_filed: 0
-    length: 1273675408.2785897
-  particles_of_each_hit:
-  - mass: 1
-    charge: -1
-
-  momentum_filter:
-  momentum_filters_each_hit:
+  # ((x,y) * rot(th) - (x0,y0)) * (dx,dy) + (x1,y1)
+  axis_angle_of_detector: -30 deg  # th
+  dead_time: 80 ns
+  dead_flag: 14  # bigger than the value is dead
+  time_zero_of_flight_time: -324.561269 ns
+  x_zero_of_image: 0.5 mm  # x0
+  y_zero_of_image: -0.5 mm  # y0
+  pixel_size_of_x: 1.64  # dx
+  pixel_size_of_y: 1.63  # dy
+electrons:
+  number_of_hits: 1
+  flight_time_from: 15 ns
+  flight_time_to: 30 ns
