@@ -1,18 +1,22 @@
+import json
+from collections import deque
 from glob import iglob as glob
 from itertools import repeat, count
-from json import dump
 from operator import sub, getitem
 from textwrap import dedent
 from typing import TypeVar, Mapping, Callable, Iterable
+from sys import argv
 
-from cytoolz import concat, concatv, pipe, curry, take, juxt, compose, unique, merge
+import dill as pickle
+import yaml
+from cytoolz import concat, concatv, pipe, curry, take, juxt, compose, unique, merge, partition_all
 from cytoolz.curried import take, map, merge, filter, flip
-from dill import loads, dumps
 from numba import jit
+from numpy import arange
 from pandas import DataFrame
 from pathos.multiprocessing import Pool
 from toolz.sandbox import unzip
-from yaml import load
+from tqdm import tqdm
 
 from anatools import (Read, is_between, affine_transform, accelerate, compose_accelerators, momentum, Object, Objects,
                       as_atomic_mass, as_nano_sec, with_unit)
@@ -30,6 +34,7 @@ def formated(config: Mapping) -> Mapping:
     return {
         'filenames': filenames,
         'treename': config['events']['treename'],
+        'prefix': config.get('prefix', ''),
         'ion': {
             'global_filter': {
                 't': (ion_t0, ion_t0 + with_unit(config['ion']['dead_time'])),
@@ -102,7 +107,22 @@ def formated(config: Mapping) -> Mapping:
 @curry
 def read(treename: str, filename: str) -> Iterable[Mapping]:
     with Read(filename) as r:
-        yield from r[treename]
+        yield from tqdm(r[treename])
+
+
+@curry
+def read_sliced(treename: str, filename: str, slice: slice):
+    with Read(filename) as r:
+        return r[treename][slice]
+
+
+@curry
+def fold(treename: str, filename: str, map=map, chunksize=128):  # todo: suppose to work, but not working with 'imap'
+    with Read(filename) as r:
+        n = arange(len(r[treename]))
+    chunks = partition_all(chunksize, n)
+    slices = (slice(chunk[0], chunk[-1] + 1) for chunk in chunks)
+    return tqdm(concat(map(read_sliced(treename, filename), slices)), total=len(n))
 
 
 @curry
@@ -131,16 +151,16 @@ def accelerator(master: Callable, p: Callable, event: Mapping) -> Mapping:
 
 
 def processor(m: Mapping) -> Callable[[Mapping], Objects]:
-    filters = pipe(m.get('global_filter', {}), event_filter, dumps)
+    filters = pipe(m.get('global_filter', {}), event_filter)
 
     nlimit = m.get('nlimit', 0)
     t = flip(sub, m.get('t0', 0))
     merged = (merge(m.get('image_transformer', {}), m)
               for m in concatv(m.get('image_transformers_of_each_hit', tuple()), repeat({})))
     xy = (affine_transform(**d) for d in merged)
-    transformers = pipe((transformer(t, xy_) for xy_ in xy), take(nlimit), tuple, dumps)
+    transformers = pipe((transformer(t, xy_) for xy_ in xy), take(nlimit), tuple, pickle.dumps)
 
-    master = (event_filter(filters) for filters in m.get('master_filters_of_each_hit', tuple()))
+    master = (event_filter(d) for d in m.get('master_filters_of_each_hit', tuple()))
     particles = m.get('particles_of_each_hit', tuple())
     acc = compose_accelerators(accelerate(**reg) for reg in m.get('accelerators_of_each_region', tuple()))
     for i, p in zip(count(), particles):
@@ -153,13 +173,13 @@ def processor(m: Mapping) -> Callable[[Mapping], Objects]:
                         charge (au): {charge}
                         TOF at pz=0 (ns): {t}\
                      """.format(i, mass=as_atomic_mass(mass), charge=charge, t=as_nano_sec(t))))
-    mmt = (momentum(**p, accelerator=acc, magnetic_filed=m.get('magnetic_filed', 0)) for p in particles)
-    accelerators = pipe((accelerator(m, p) for m, p in zip(master, mmt)), tuple, dumps)
+    mmt = (momentum(accelerator=acc, magnetic_filed=m.get('magnetic_filed', 0), **p) for p in particles)
+    accelerators = pipe((accelerator(m, p) for m, p in zip(master, mmt)), tuple, pickle.dumps)
 
     def process(event: Mapping) -> Objects:
-        filtered = filter(loads(filters), event)
-        transformed = (f(e) for f, e in zip(loads(transformers), filtered))
-        accelerated = (f(e) for f, e in zip(loads(accelerators), transformed))
+        filtered = filter(filters, event)
+        transformed = (f(e) for f, e in zip(pickle.loads(transformers), filtered))
+        accelerated = (f(e) for f, e in zip(pickle.loads(accelerators), transformed))
         return Objects(*(Object(**d) for d in accelerated))
 
     return process
@@ -185,17 +205,33 @@ def export(ion_events: Iterable[Objects], electron_events: Iterable[Objects]) ->
                        merge)
 
 
-with open('config.yaml', 'r') as f:
-    config = formated(load(f))
-with open('loaded_config.json', 'w') as f:
-    dump(config, f, sort_keys=True, indent=2)
+if __name__ == '__main__':
+    if not len(argv) == 2:
+        raise ValueError('Give me config file!')
+    with open(argv[1], 'r') as f:
+        config = formated(yaml.load(f))
+    prefix = config['prefix']
 
-ion_processor = compose(processor(config['ion']), flip(getitem, 'ion'))
-electron_processor = compose(processor(config['electron']), flip(getitem, 'electron'))
-events = pipe(config['filenames'], map(read(config['treename'])), concat)
+    with open('{}loaded_config.json'.format(prefix), 'w') as f:
+        json.dump(config, f, sort_keys=True, indent=2)
 
-with Pool(16) as p:
-    pmap = curry(p.imap)
-    ion_events, electron_events = pipe(events, pmap(juxt(ion_processor, electron_processor)), unzip)
-    df = pipe(export(ion_events, electron_events), list, DataFrame)
-df.to_csv('exported.csv')
+    ion_processor = compose(processor(config['ion']), flip(getitem, 'ion'))
+    electron_processor = compose(processor(config['electron']), flip(getitem, 'electron'))
+    execute = flip(deque, 0)
+
+    # events = pipe(config['filenames'], map(read(config['treename'])), concat)
+    with Pool(1) as p2:  # todo: make config enable to change number of workers
+        events = pipe(config['filenames'], map(fold(config['treename'], map=p2.imap_unordered)), concat)
+
+        with Pool(8) as p1:
+            pmap = curry(p1.imap_unordered)
+            ion_events, electron_events = pipe(events, pmap(juxt(ion_processor, electron_processor)), unzip)
+
+            # df = pipe(export(ion_events, electron_events), list, DataFrame)
+            with open('{}exported.json'.format(prefix), 'w') as f:
+                write = map(compose(f.write, '{}\n'.format, json.dumps))
+                pipe(export(ion_events, electron_events), write, execute)
+
+    with open('{}exported.json'.format(prefix), 'r') as f:
+        df = pipe(f, map(json.loads), list, DataFrame)
+    df.to_csv('{}exported.csv'.format(prefix))

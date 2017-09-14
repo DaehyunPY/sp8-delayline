@@ -4,6 +4,7 @@ from typing import Mapping, Sequence, Callable, TypeVar, Iterable
 from cytoolz import curry, reduce, compose, memoize
 from cytoolz.curried import flip
 from numba import jit
+from numpy import linspace
 from numpy import nan, pi, sin
 from scipy.optimize import newton
 

@@ -3,6 +3,7 @@ events:
     - test.root
   treename: resortedData
   limit_of_hits: 8
+prefix: test_
 
 spectrometer:
   #   Ion2nd                 Ion1st       Electron
