@@ -3,9 +3,9 @@ from collections import deque
 from glob import iglob as glob
 from itertools import repeat, count
 from operator import sub, getitem
+from sys import argv
 from textwrap import dedent
 from typing import TypeVar, Mapping, Callable, Iterable
-from sys import argv
 
 import dill as pickle
 import yaml
@@ -35,6 +35,7 @@ def formated(config: Mapping) -> Mapping:
         'filenames': filenames,
         'treename': config['events']['treename'],
         'prefix': config.get('prefix', ''),
+        'processes': config.get('processes', 1),
         'ion': {
             'global_filter': {
                 't': (ion_t0, ion_t0 + with_unit(config['ion']['dead_time'])),
@@ -107,6 +108,7 @@ def formated(config: Mapping) -> Mapping:
 @curry
 def read(treename: str, filename: str) -> Iterable[Mapping]:
     with Read(filename) as r:
+        print("Reading root file: '{}'...".format(filename))
         yield from tqdm(r[treename])
 
 
@@ -119,6 +121,7 @@ def read_sliced(treename: str, filename: str, slice: slice):
 @curry
 def fold(treename: str, filename: str, map=map, chunksize=128):  # todo: suppose to work, but not working with 'imap'
     with Read(filename) as r:
+        print("Reading root file: '{}'...".format(filename))
         n = arange(len(r[treename]))
     chunks = partition_all(chunksize, n)
     slices = (slice(chunk[0], chunk[-1] + 1) for chunk in chunks)
@@ -151,7 +154,7 @@ def accelerator(master: Callable, p: Callable, event: Mapping) -> Mapping:
 
 
 def processor(m: Mapping) -> Callable[[Mapping], Objects]:
-    filters = pipe(m.get('global_filter', {}), event_filter)
+    filters = pipe(m.get('global_filter', {}), event_filter, pickle.dumps)
 
     nlimit = m.get('nlimit', 0)
     t = flip(sub, m.get('t0', 0))
@@ -177,7 +180,7 @@ def processor(m: Mapping) -> Callable[[Mapping], Objects]:
     accelerators = pipe((accelerator(m, p) for m, p in zip(master, mmt)), tuple, pickle.dumps)
 
     def process(event: Mapping) -> Objects:
-        filtered = filter(filters, event)
+        filtered = filter(pickle.loads(filters), event)
         transformed = (f(e) for f, e in zip(pickle.loads(transformers), filtered))
         accelerated = (f(e) for f, e in zip(pickle.loads(accelerators), transformed))
         return Objects(*(Object(**d) for d in accelerated))
@@ -206,9 +209,15 @@ def export(ion_events: Iterable[Objects], electron_events: Iterable[Objects]) ->
 
 
 if __name__ == '__main__':
-    if not len(argv) == 2:
-        raise ValueError('Give me config file!')
-    with open(argv[1], 'r') as f:
+    if len(argv) == 1:
+        config_ = 'config.yaml'
+    elif len(argv) == 2:
+        config_ = argv[1]
+    else:
+        raise ValueError("Too many arguments!: '{}'".format(argv[1:]))
+
+    with open(config_, 'r') as f:
+        print("Reading config file: '{}'...".format(config_))
         config = formated(yaml.load(f))
     prefix = config['prefix']
 
@@ -219,18 +228,17 @@ if __name__ == '__main__':
     electron_processor = compose(processor(config['electron']), flip(getitem, 'electron'))
     execute = flip(deque, 0)
 
-    # events = pipe(config['filenames'], map(read(config['treename'])), concat)
-    with Pool(1) as p2:  # todo: make config enable to change number of workers
-        events = pipe(config['filenames'], map(fold(config['treename'], map=p2.imap_unordered)), concat)
+    events = pipe(config['filenames'], map(read(config['treename'])), concat)
+    # with Pool(1) as p2:  # better to read with single process
+    #     events = pipe(config['filenames'], map(fold(config['treename'], map=p2.imap_unordered)), concat)
 
-        with Pool(8) as p1:
-            pmap = curry(p1.imap_unordered)
-            ion_events, electron_events = pipe(events, pmap(juxt(ion_processor, electron_processor)), unzip)
+    with Pool(config.get('processes', 1)) as p1:
+        pmap = curry(p1.imap_unordered)
+        ion_events, electron_events = pipe(events, pmap(juxt(ion_processor, electron_processor)), unzip)
 
-            # df = pipe(export(ion_events, electron_events), list, DataFrame)
-            with open('{}exported.json'.format(prefix), 'w') as f:
-                write = map(compose(f.write, '{}\n'.format, json.dumps))
-                pipe(export(ion_events, electron_events), write, execute)
+        with open('{}exported.json'.format(prefix), 'w') as f:
+            write = map(compose(f.write, '{}\n'.format, json.dumps))
+            pipe(export(ion_events, electron_events), write, execute)
 
     with open('{}exported.json'.format(prefix), 'r') as f:
         df = pipe(f, map(json.loads), list, DataFrame)
