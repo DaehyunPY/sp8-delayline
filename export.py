@@ -9,7 +9,7 @@ from typing import TypeVar, Mapping, Callable, Iterable
 
 import dill as pickle
 import yaml
-from cytoolz import concat, concatv, pipe, curry, take, juxt, compose, unique, merge, partition_all
+from cytoolz import concat, pipe, curry, take, juxt, compose, unique, merge, partition_all
 from cytoolz.curried import take, map, merge, filter, flip
 from numba import jit
 from numpy import arange
@@ -158,10 +158,10 @@ def processor(m: Mapping) -> Callable[[Mapping], Objects]:
 
     nlimit = m.get('nlimit', 0)
     t = flip(sub, m.get('t0', 0))
-    merged = (merge(m.get('image_transformer', {}), m)
-              for m in concatv(m.get('image_transformers_of_each_hit', tuple()), repeat({})))
+    each_hits = pipe(concat((m.get('image_transformers_of_each_hit', tuple()), repeat({}))), take(nlimit))
+    merged = (merge(m.get('image_transformer', {}), d) for d in each_hits)
     xy = (affine_transform(**d) for d in merged)
-    transformers = pipe((transformer(t, xy_) for xy_ in xy), take(nlimit), tuple, pickle.dumps)
+    transformers = pipe(xy, map(transformer(t)), tuple, pickle.dumps)
 
     master = (event_filter(d) for d in m.get('master_filters_of_each_hit', tuple()))
     particles = m.get('particles_of_each_hit', tuple())
@@ -183,7 +183,8 @@ def processor(m: Mapping) -> Callable[[Mapping], Objects]:
         filtered = filter(pickle.loads(filters), event)
         transformed = (f(e) for f, e in zip(pickle.loads(transformers), filtered))
         accelerated = (f(e) for f, e in zip(pickle.loads(accelerators), transformed))
-        return Objects(*(Object(**d) for d in accelerated))
+        objects = Objects(*(Object(**d) for d in accelerated))
+        return objects
 
     return process
 
@@ -191,7 +192,7 @@ def processor(m: Mapping) -> Callable[[Mapping], Objects]:
 def export(ion_events: Iterable[Objects], electron_events: Iterable[Objects]) -> Iterable[Mapping]:
     for ions, electrons in zip(ion_events, electron_events):
         if not ((len(ions.having_momentum) == 0) and (len(electrons.having_momentum) == 0)):
-            yield pipe(concatv(({'i{}h_t'.format(n): i.t,
+            yield pipe(concat((({'i{}h_t'.format(n): i.t,
                                  'i{}h_x'.format(n): i.x,
                                  'i{}h_y'.format(n): i.y,
                                  'i{}h_ke'.format(n): i.ke,
@@ -204,7 +205,7 @@ def export(ion_events: Iterable[Objects], electron_events: Iterable[Objects]) ->
                                  'e{}h_ke'.format(n): e.ke,
                                  'e{}h_px'.format(n): e.px,
                                  'e{}h_py'.format(n): e.py,
-                                 'e{}h_pz'.format(n): e.pz} for n, e in zip(count(1), electrons.having_momentum))),
+                                 'e{}h_pz'.format(n): e.pz} for n, e in zip(count(1), electrons.having_momentum)))),
                        merge)
 
 

@@ -1,6 +1,6 @@
 from cytoolz import pipe
 from cytoolz.curried import filter, flip
-from numpy import nan, arctan2, arccos, average, sum, max, isfinite
+from numpy import nan, arctan2, arccos, average, sum, isfinite
 
 from .units import as_milli_meter, as_nano_sec, as_electron_volt, as_degree, as_atomic_mass
 
@@ -12,7 +12,6 @@ class Object:
         self.__x = x
         self.__y = y
         self.__t = t
-        self.__flag = flag
         self.__ke = ke
         self.__px = px
         self.__py = py
@@ -69,10 +68,6 @@ class Object:
     @property
     def t(self):
         return as_nano_sec(self.t_)
-
-    @property
-    def flag(self):
-        return self.__flag
 
     @property
     def px_(self):
@@ -188,24 +183,22 @@ class Objects(Object):
         self.__objects = tuple(objects)
         self.__having_momentum = pipe(self, filter(flip(getattr, 'has_momentum')), tuple)
         if len(self.having_momentum) == 0:
-            super(Objects, self).__init__(x=nan, y=nan, t=nan, flag=None, px=nan, py=nan, pz=nan)
-            self.__weight = nan
+            super().__init__(x=nan, y=nan, t=nan)
+            self.__weight = 0
         elif len(self.having_momentum) == 1:
             o = self.having_momentum[0]
-            super(Objects, self).__init__(x=o.x_, y=o.y_, t=o.t_, flag=o.flag, ke=o.ke_, px=o.px_, py=o.py_, pz=o.pz_)
+            super().__init__(x=o.x_, y=o.y_, t=o.t_, ke=o.ke_, px=o.px_, py=o.py_, pz=o.pz_)
             self.__weight = o.weight
         else:
             x = tuple(o.x_ for o in self.having_momentum)
             y = tuple(o.x_ for o in self.having_momentum)
             w = tuple(o.weight for o in self.having_momentum)
-            flag = tuple(o.flag for o in self.having_momentum)
             ke = tuple(o.ke_ for o in self.having_momentum)
             px = tuple(o.px_ for o in self.having_momentum)
             py = tuple(o.py_ for o in self.having_momentum)
             pz = tuple(o.pz_ for o in self.having_momentum)
-            super(Objects, self).__init__(x=average(x, weights=w), y=average(y, weights=w), t=nan,
-                                          flag=max(flag) if (any(f is None) for f in flag) else None,
-                                          ke=sum(ke), px=sum(px), py=sum(py), pz=sum(pz))
+            super().__init__(x=average(x, weights=w), y=average(y, weights=w), t=nan,
+                             ke=sum(ke), px=sum(px), py=sum(py), pz=sum(pz))
             self.__weight = sum(w)
 
     def __len__(self):
