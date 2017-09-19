@@ -6,6 +6,8 @@ from operator import sub, getitem
 from sys import argv
 from textwrap import dedent
 from typing import TypeVar, Mapping, Callable, Iterable
+from os import chdir
+from os.path import abspath, dirname
 
 import dill as pickle
 import yaml
@@ -211,9 +213,10 @@ def export(ion_events: Iterable[Objects], electron_events: Iterable[Objects]) ->
 
 if __name__ == '__main__':
     if len(argv) == 1:
-        config_ = 'config.yaml'
+        raise ValueError("Usage: program config")
     elif len(argv) == 2:
-        config_ = argv[1]
+        config_ = abspath(argv[1])
+        chdir(dirname(config_))
     else:
         raise ValueError("Too many arguments!: '{}'".format(argv[1:]))
 
