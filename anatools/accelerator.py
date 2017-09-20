@@ -12,31 +12,15 @@ from .others import call_with_kwargs, rot_mat
 __all__ = ('accelerate', 'compose_accelerators', 'momentum')
 
 T = TypeVar('T')
-PINFO = Mapping
-Accelerator = Callable[[T, T, T], PINFO]
 
 
 @curry
 @jit
-def momentum_xy(mass, charge, x, y, t, magnetic_filed=0):
-    if magnetic_filed == 0:
-        th = 0
-        p = mass / t
-    else:
-        freq = magnetic_filed * charge / mass
-        th = (freq * t / 2) % pi
-        p = magnetic_filed * charge / sin(th) / 2
-    return rot_mat(th) @ (x, y) * p
-
-
-@curry
-@jit
-def accelerate(mass, charge, pz, electric_filed=0, length=0) -> PINFO:
+def accelerate(mass, charge, pz, electric_filed=0, length=0) -> Mapping:
     if length <= 0:
         raise ValueError("Parameter 'length' {} is invalid!".format(length))
     if mass <= 0:
-        raise ValueError("Parameter 'mass' {} is invalid!".format(mass))
-
+        return {'momentum': nan, 'diff_momentum': nan, 'flight_time': nan, 'diff_flight_time': nan}
     if charge == 0:
         return {'momentum': nan, 'diff_momentum': nan, 'flight_time': nan, 'diff_flight_time': nan}
     if electric_filed == 0:
@@ -59,8 +43,8 @@ def accelerate(mass, charge, pz, electric_filed=0, length=0) -> PINFO:
 
 @curry
 @jit
-def wrap_accelerator(accelerator: Accelerator, mass: T, charge: T,
-                     momentum: T, diff_momentum=1, flight_time=0, diff_flight_time=0) -> PINFO:
+def wrap_accelerator(accelerator: Callable[[T, T, T], Mapping], mass: T, charge: T,
+                     momentum: T, diff_momentum=1, flight_time=0, diff_flight_time=0) -> Mapping:
     accelerated = accelerator(mass, charge, momentum)
     return {'momentum': accelerated['momentum'],
             'diff_momentum': diff_momentum * accelerated['diff_momentum'],
@@ -68,11 +52,12 @@ def wrap_accelerator(accelerator: Accelerator, mass: T, charge: T,
             'diff_flight_time': diff_flight_time + diff_momentum * accelerated['diff_flight_time']}
 
 
-def compose_accelerators(accelerators: Iterable[Accelerator]) -> Callable[[T, T, T], PINFO]:
-    wrapped: Sequence[Callable[[T, T], Callable[[PINFO], PINFO]]] = tuple(wrap_accelerator(acc) for acc in accelerators)
+def compose_accelerators(accelerators: Iterable[Callable[[T, T, T], Mapping]]) -> Callable[[T, T, T], Mapping]:
+    wrapped: Sequence[Callable[[T, T], Callable[[Mapping], Mapping]]] = tuple(wrap_accelerator(acc)
+                                                                              for acc in accelerators)
 
     @curry
-    def accelerator(mass, charge, pz) -> PINFO:
+    def accelerator(mass, charge, pz) -> Mapping:
         return reduce(flip(call_with_kwargs), (w(mass, charge) for w in wrapped), {'momentum': pz})
 
     return accelerator
@@ -80,7 +65,20 @@ def compose_accelerators(accelerators: Iterable[Accelerator]) -> Callable[[T, T,
 
 @curry
 @jit
-def momentum_z(mass, charge, t, accelerator: Accelerator):
+def momentum_xy(mass, charge, x, y, t, magnetic_filed=0):
+    if magnetic_filed == 0:
+        th = 0
+        p = mass / t
+    else:
+        freq = magnetic_filed * charge / mass
+        th = (freq * t / 2) % pi
+        p = magnetic_filed * charge / sin(th) / 2
+    return rot_mat(th) @ (x, y) * p
+
+
+@curry
+@jit
+def momentum_z(mass, charge, t, accelerator: Callable[[T, T, T], Mapping]):
     memoized = memoize(accelerator(mass, charge))
     return newton(compose(flip(sub, t), flip(getitem, 'flight_time'), memoized), 0,
                   compose(flip(getitem, 'diff_flight_time'), memoized))
@@ -95,6 +93,8 @@ def kinetic_energy(px, py, pz, mass=1):
 @curry
 @jit
 def momentum(x, y, t, accelerator, magnetic_filed=0, mass=1, charge=0):
+    if mass == 0 and charge == 0:
+        return nan, nan, nan, nan
     px, py = momentum_xy(mass, charge, x, y, t, magnetic_filed=magnetic_filed)
     pz = momentum_z(mass, charge, t, accelerator=accelerator)
     ke = kinetic_energy(px, py, pz, mass=mass)

@@ -2,9 +2,8 @@ events:
   filenames:
     - test.root
   treename: resortedData
-  limit_of_hits: 8
 prefix: test_
-processes: 4
+processes: 8
 
 spectrometer:
   #   Ion2nd                 Ion1st       Electron

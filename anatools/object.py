@@ -8,7 +8,7 @@ __all__ = ('Object', 'Objects')
 
 
 class Object:
-    def __init__(self, x, y, t, flag=None, ke=nan, px=nan, py=nan, pz=nan):
+    def __init__(self, x, y, t, ke=nan, px=nan, py=nan, pz=nan):
         self.__x = x
         self.__y = y
         self.__t = t

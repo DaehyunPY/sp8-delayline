@@ -5,4 +5,3 @@ cytoolz
 PyYAML
 tqdm
 numba
-pathos
