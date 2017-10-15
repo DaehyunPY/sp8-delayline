@@ -3,7 +3,7 @@ events:
     - test.root
   treename: resortedData
 prefix: test_
-processes: 8
+processes: 4
 
 spectrometer:
   #   Ion2nd                 Ion1st       Electron

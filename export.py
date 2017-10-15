@@ -6,7 +6,6 @@ from multiprocessing import Pool
 from os import chdir
 from os.path import abspath, dirname
 from sys import argv
-from textwrap import dedent
 from typing import Mapping, Iterable, Sequence, Optional, Callable
 
 import yaml
@@ -17,8 +16,7 @@ from pandas import DataFrame
 from toolz.sandbox import unzip
 from tqdm import tqdm
 
-from anatools import (Read, is_between, affine_transform, accelerate, compose_accelerators, momentum, Object, Objects,
-                      as_atomic_mass, as_nano_sec, with_unit)
+from anatools import Read, is_between, affine_transform, accelerator, Momentum, Object, Objects, with_unit
 
 
 def formated_config(config: Mapping) -> Mapping:
@@ -149,18 +147,8 @@ class Analysis:
 
         self.__master_conditions: Sequence[Callable[[Mapping], bool]] = tuple(keys_are_between(d)
                                                                               for d in master_filters_of_each_hit)
-        accelerator = compose_accelerators(accelerate(**reg) for reg in accelerators_of_each_region)
-        for i, p in zip(count(), particles_of_each_hit):
-            mass = p['mass']
-            charge = p['charge']
-            t = accelerator(mass, charge, 0)['flight_time']
-            print(dedent("""\
-                         object #{}:
-                            mass (u): {mass}
-                            charge (au): {charge}
-                            TOF at pz=0 (ns): {t}\
-                         """.format(i, mass=as_atomic_mass(mass), charge=charge, t=as_nano_sec(t))))
-        self.__calculators = tuple(momentum(accelerator=accelerator, magnetic_filed=magnetic_filed, **p)
+        acc = accelerator(*accelerators_of_each_region)
+        self.__calculators = tuple(Momentum(accelerator=acc, magnetic_filed=magnetic_filed, **p)
                                    for p in particles_of_each_hit)
 
     def __hit_transform(self, event):

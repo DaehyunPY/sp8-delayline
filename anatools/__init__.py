@@ -4,7 +4,7 @@ from .others import *
 from .rootio import *
 from .units import *
 
-__all__ = ('accelerate', 'compose_accelerators', 'momentum',  # from .accelerator
+__all__ = ('accelerator', 'Momentum',  # from .accelerator
            'Object', 'Objects',  # from .object
            'call', 'call_with_args', 'call_with_kwargs', 'is_between', 'rot_mat', 'affine_transform',  # from .others
            'Read', 'Write',  # from .rootio

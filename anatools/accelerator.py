@@ -1,71 +1,116 @@
-from operator import getitem, sub
-from typing import Mapping, Sequence, Callable, TypeVar, Iterable
+from operator import rshift
+from textwrap import dedent
+from typing import Mapping, Callable, Tuple
 
-from cytoolz import curry, reduce, compose, memoize
-from cytoolz.curried import flip
+from cytoolz import memoize, reduce
 from numba import jit
-from numpy import nan, pi, sin
-from scipy.optimize import newton
+from numpy import pi, sin, linspace, ndarray
+from scipy.optimize import curve_fit
+from sympy import symbols, sqrt, Integer, lambdify
 
-from .others import call_with_kwargs, rot_mat
+from .others import rot_mat
+from .units import as_atomic_mass, as_nano_sec
 
-__all__ = ('accelerate', 'compose_accelerators', 'momentum')
+__all__ = ('accelerator', 'Momentum')
 
-T = TypeVar('T')
+_mass, _charge, _init_momentum, _field, _length = symbols('m q p f l', real=True)
+
+_fin_momentum_wo_filed = _init_momentum
+_diff_fin_momentum_wo_filed = Integer(1)
+_flight_time_wo_filed = _length * _mass / _init_momentum
+_diff_flight_time_wo_filed = - _length * _mass / _init_momentum ** 2
+
+_fin_ke = _init_momentum ** 2 / _mass / 2 + _field * _charge * _length
+_fin_momentum = sqrt(2 * _fin_ke * _mass)
+_diff_fin_momentum = _init_momentum / _fin_momentum
+_flight_time = (_fin_momentum - _init_momentum) / _field / _charge
+_diff_flight_time = (_init_momentum / _fin_momentum - 1) / _field / _charge
 
 
-@curry
-@jit
-def accelerate(mass, charge, pz, electric_filed=0, length=0) -> Mapping:
+class Accelerator:
+    def __init__(self, fin_momentum, diff_fin_momentum, flight_time, diff_flight_time):
+        self.__fin_momentum = fin_momentum
+        self.__diff_fin_momentum = diff_fin_momentum
+        self.__flight_time = flight_time
+        self.__diff_flight_time = diff_flight_time
+
+    def __repr__(self):
+        return dedent("""\
+            accelerated momentum: {}
+            momentum differential: {}
+            flight time: {}
+            flight time differential: {}""".format(repr(self.fin_momentum),
+                                                   repr(self.diff_fin_momentum),
+                                                   repr(self.flight_time),
+                                                   repr(self.diff_flight_time)))
+
+    @property
+    def fin_momentum(self):
+        return self.__fin_momentum
+
+    @property
+    def diff_fin_momentum(self):
+        return self.__diff_fin_momentum
+
+    @property
+    def flight_time(self):
+        return self.__flight_time
+
+    @property
+    def diff_flight_time(self):
+        return self.__diff_flight_time
+
+    def __rshift__(self, shift: 'Accelerator') -> 'Accelerator':
+        fin_momentum = shift.fin_momentum.subs(_init_momentum, self.fin_momentum)
+        diff_fin_momentum = shift.diff_fin_momentum.subs(_init_momentum, self.fin_momentum)
+        flight_time = shift.flight_time.subs(_init_momentum, self.fin_momentum)
+        diff_flight_time = shift.diff_flight_time.subs(_init_momentum, self.fin_momentum)
+        return Accelerator(fin_momentum=fin_momentum,
+                           diff_fin_momentum=self.diff_fin_momentum * diff_fin_momentum,
+                           flight_time=self.flight_time + flight_time,
+                           diff_flight_time=self.diff_flight_time + self.diff_fin_momentum * diff_flight_time)
+
+    def __lshift__(self, shift: 'Accelerator') -> 'Accelerator':
+        return shift >> self
+
+    def __mul__(self, other: 'Accelerator') -> 'Accelerator':
+        return self << other
+
+    @memoize
+    def __call__(self, mass: float, charge: float) -> Callable[[float], float]:  # init momentum -> flight time
+        if mass <= 0:
+            raise ValueError("Parameter 'mass' {} is invalid!".format(mass))
+        if charge == 0:
+            raise ValueError("Parameter 'charge' {} is invalid!".format(charge))
+        flight_time = self.flight_time.subs(_mass, mass).subs(_charge, charge)
+        # diff_flight_time = self.diff_flight_time.subs(_mass, mass).subs(_charge, charge)
+        return lambdify(_init_momentum, flight_time, 'numpy')
+
+
+def single_accelerator(electric_filed: float, length: float) -> Accelerator:
     if length <= 0:
         raise ValueError("Parameter 'length' {} is invalid!".format(length))
-    if mass <= 0:
-        return {'momentum': nan, 'diff_momentum': nan, 'flight_time': nan, 'diff_flight_time': nan}
-    if charge == 0:
-        return {'momentum': nan, 'diff_momentum': nan, 'flight_time': nan, 'diff_flight_time': nan}
     if electric_filed == 0:
-        if pz <= 0:
-            return {'momentum': nan, 'diff_momentum': nan, 'flight_time': nan, 'diff_flight_time': nan}
-        return {'momentum': pz,
-                'diff_momentum': 1,
-                'flight_time': length * mass / pz,
-                'diff_flight_time': - length * mass / pz ** 2}
-
-    energy = pz ** 2 / 2 / mass + electric_filed * charge * length
-    if energy <= 0:
-        return {'momentum': nan, 'diff_momentum': nan, 'flight_time': nan, 'diff_flight_time': nan}
-    accelerated = (energy * 2 * mass) ** 0.5
-    return {'momentum': accelerated,
-            'diff_momentum': pz / accelerated,
-            'flight_time': (accelerated - pz) / electric_filed / charge,
-            'diff_flight_time': (pz / accelerated - 1) / electric_filed / charge}
+        return Accelerator(fin_momentum=_fin_momentum_wo_filed.subs(_length, length),
+                           diff_fin_momentum=_diff_fin_momentum_wo_filed.subs(_length, length),
+                           flight_time=_flight_time_wo_filed.subs(_length, length),
+                           diff_flight_time=_diff_flight_time_wo_filed.subs(_length, length))
+    return Accelerator(fin_momentum=_fin_momentum.subs(_field, electric_filed).subs(_length, length),
+                       diff_fin_momentum=_diff_fin_momentum.subs(_field, electric_filed).subs(_length, length),
+                       flight_time=_flight_time.subs(_field, electric_filed).subs(_length, length),
+                       diff_flight_time=_diff_flight_time.subs(_field, electric_filed).subs(_length, length))
 
 
-@curry
+def accelerator(*spec: Mapping[str, float]) -> Accelerator:
+    if len(spec) == 0:
+        raise ValueError('These is no argument!')
+    if len(spec) == 1:
+        return single_accelerator(**spec[0])
+    return reduce(rshift, (single_accelerator(**reg) for reg in spec))
+
+
 @jit
-def wrap_accelerator(accelerator: Callable[[T, T, T], Mapping], mass: T, charge: T,
-                     momentum: T, diff_momentum=1, flight_time=0, diff_flight_time=0) -> Mapping:
-    accelerated = accelerator(mass, charge, momentum)
-    return {'momentum': accelerated['momentum'],
-            'diff_momentum': diff_momentum * accelerated['diff_momentum'],
-            'flight_time': flight_time + accelerated['flight_time'],
-            'diff_flight_time': diff_flight_time + diff_momentum * accelerated['diff_flight_time']}
-
-
-def compose_accelerators(accelerators: Iterable[Callable[[T, T, T], Mapping]]) -> Callable[[T, T, T], Mapping]:
-    wrapped: Sequence[Callable[[T, T], Callable[[Mapping], Mapping]]] = tuple(wrap_accelerator(acc)
-                                                                              for acc in accelerators)
-
-    @curry
-    def accelerator(mass, charge, pz) -> Mapping:
-        return reduce(flip(call_with_kwargs), (w(mass, charge) for w in wrapped), {'momentum': pz})
-
-    return accelerator
-
-
-@curry
-@jit
-def momentum_xy(mass, charge, x, y, t, magnetic_filed=0):
+def momentum_xy(x: float, y: float, t: float, mass: float = 1, charge: float = -1, magnetic_filed: float = 0):
     if magnetic_filed == 0:
         th = 0
         p = mass / t
@@ -76,26 +121,91 @@ def momentum_xy(mass, charge, x, y, t, magnetic_filed=0):
     return rot_mat(th) @ (x, y) * p
 
 
-@curry
 @jit
-def momentum_z(mass, charge, t, accelerator: Callable[[T, T, T], Mapping]):
-    memoized = memoize(accelerator(mass, charge))
-    return newton(compose(flip(sub, t), flip(getitem, 'flight_time'), memoized), 0,
-                  compose(flip(getitem, 'diff_flight_time'), memoized))
-
-
-@curry
-@jit
-def kinetic_energy(px, py, pz, mass=1):
+def kinetic_energy(px, py, pz, mass: float = 1):
     return (px ** 2 + py ** 2 + pz ** 2) / 2 / mass
 
 
-@curry
-@jit
-def momentum(x, y, t, accelerator, magnetic_filed=0, mass=1, charge=0):
-    if mass == 0 and charge == 0:
-        return nan, nan, nan, nan
-    px, py = momentum_xy(mass, charge, x, y, t, magnetic_filed=magnetic_filed)
-    pz = momentum_z(mass, charge, t, accelerator=accelerator)
-    ke = kinetic_energy(px, py, pz, mass=mass)
-    return ke, px, py, pz
+class Momentum:
+    def __init__(self, accelerator: Accelerator, magnetic_filed: float, mass: float, charge: float):
+        self.__mass = mass
+        self.__charge = charge
+        self.__magnetic_filed = magnetic_filed
+        if mass > 1:  # ion
+            p = linspace(-500, 500, num=1001)
+            acc = accelerator(mass=mass, charge=charge)
+            t: ndarray = acc(p)
+            self.__model_args, _ = curve_fit(self.model, t, p)
+            diff = p - self.model(t, *self.model_args)
+            print(dedent("""\
+                         momentum calculator summary:
+                             mass (u): {m:1.3f}
+                             charge (au): {q:1.0f}
+                             flight time at pz=0 (ns): {t:1.3f}
+                             time domain of pz model (ns): {tmin:1.3f} -- {tmax:1.3f}
+                             safe range of pz model (au): -500 -- 500
+                             pz model error in the domain (au): {pmin:1.3f} -- {pmax:1.3f}""".format(
+                m=as_atomic_mass(mass),
+                q=charge,
+                t=as_nano_sec(acc(0)),
+                tmin=as_nano_sec(t.min()),
+                tmax=as_nano_sec(t.max()),
+                pmin=diff.min(),
+                pmax=diff.max())))
+        else:  # electron
+            p = linspace(-5, 5, num=1001)
+            acc = accelerator(mass=mass, charge=charge)
+            t: ndarray = acc(p)
+            self.__model_args, _ = curve_fit(self.model, t, p)
+            diff = p - self.model(t, *self.model_args)
+            print(dedent("""\
+                         momentum calculator summary:
+                             mass (au): {m:1.3f}
+                             charge (au): {q:1.0f}
+                             flight time at pz=0 (ns): {t:1.3f}
+                             time domain of pz model (ns): {tmin:1.3f} -- {tmax:1.3f}
+                             safe range of pz model (au): -5 -- 5
+                             pz model error in the domain (au): {pmin:1.3f} -- {pmax:1.3f}""".format(
+                m=mass,
+                q=charge,
+                t=as_nano_sec(acc(0)),
+                tmin=as_nano_sec(t.min()),
+                tmax=as_nano_sec(t.max()),
+                pmin=diff.min(),
+                pmax=diff.max())))
+
+    def __repr__(self):
+        return dedent("""\
+            accelerator: unsaved
+            magnetic_filed: {}
+            mass: {}
+            charge: {}""".format(self.mass, self.charge, self.magnetic_filed))
+
+    @property
+    def mass(self):
+        return self.__mass
+
+    @property
+    def charge(self):
+        return self.__charge
+
+    @property
+    def magnetic_filed(self):
+        return self.__magnetic_filed
+
+    @staticmethod
+    @jit
+    def model(t, a9: float, a8: float, a7: float, a6: float, a5: float, a4: float,
+              a3: float, a2: float, a1: float, a0: float):
+        return (a9 * t ** 9 + a8 * t ** 8 + a7 * t ** 7 + a6 * t ** 6 + a5 * t ** 5 +
+                a4 * t ** 4 + a3 * t ** 3 + a2 * t ** 2 + a1 * t + a0)
+
+    @property
+    def model_args(self):
+        return self.__model_args
+
+    def __call__(self, x, y, t) -> Tuple[float, float, float, float]:  # ke, px, py, pz
+        px, py = momentum_xy(x, y, t, mass=self.mass, charge=self.charge, magnetic_filed=self.magnetic_filed)
+        pz = self.model(t, *self.model_args)
+        ke = kinetic_energy(px, py, pz, mass=self.mass)
+        return ke, px, py, pz
