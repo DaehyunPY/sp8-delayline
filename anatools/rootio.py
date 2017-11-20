@@ -30,16 +30,22 @@ try:
 
         @staticmethod
         def __wrap(entry: TTree):
-            return {'ion': tuple({'x': in_milli_meter(getattr(entry, 'IonX{:1d}'.format(i))),
-                                  'y': in_milli_meter(getattr(entry, 'IonY{:1d}'.format(i))),
-                                  't': in_nano_sec(getattr(entry, 'IonT{:1d}'.format(i))),
-                                  'flag': getattr(entry, 'IonFlag{:1d}'.format(i))}
-                                 for i in range(entry.IonNum)),
-                    'electron': tuple({'x': in_milli_meter(getattr(entry, 'ElecX{:1d}'.format(i))),
-                                       'y': in_milli_meter(getattr(entry, 'ElecY{:1d}'.format(i))),
-                                       't': in_nano_sec(getattr(entry, 'ElecT{:1d}'.format(i))),
-                                       'flag': getattr(entry, 'ElecFlag{:1d}'.format(i))}
-                                      for i in range(entry.ElecNum))}
+            return {
+                'ions': [
+                    {'x': in_milli_meter(getattr(entry, 'IonX{:1d}'.format(i))),
+                     'y': in_milli_meter(getattr(entry, 'IonY{:1d}'.format(i))),
+                     't': in_nano_sec(getattr(entry, 'IonT{:1d}'.format(i))),
+                     'flag': getattr(entry, 'IonFlag{:1d}'.format(i))}
+                    for i in range(entry.IonNum)
+                ],
+                'electrons': [
+                    {'x': in_milli_meter(getattr(entry, 'ElecX{:1d}'.format(i))),
+                     'y': in_milli_meter(getattr(entry, 'ElecY{:1d}'.format(i))),
+                     't': in_nano_sec(getattr(entry, 'ElecT{:1d}'.format(i))),
+                     'flag': getattr(entry, 'ElecFlag{:1d}'.format(i))}
+                    for i in range(entry.ElecNum)
+                ]
+            }
 
 
     class Read:

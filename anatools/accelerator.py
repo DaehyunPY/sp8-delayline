@@ -76,7 +76,6 @@ class Accelerator:
     def __mul__(self, other: 'Accelerator') -> 'Accelerator':
         return self << other
 
-    @memoize
     def __call__(self, mass: float, charge: float) -> Callable[[float], float]:  # init momentum -> flight time
         if mass <= 0:
             raise ValueError("Parameter 'mass' {} is invalid!".format(mass))
@@ -132,7 +131,9 @@ class Momentum:
         self.__charge = charge
         self.__magnetic_filed = magnetic_filed
         if mass > 1:  # ion
-            p = linspace(-500, 500, num=1001)
+            ratio = (mass/charge)**0.5
+            safe = ratio*2.5//100*100
+            p = linspace(-safe, safe, num=1001)
             acc = accelerator(mass=mass, charge=charge)
             t: ndarray = acc(p)
             self.__model_args, _ = curve_fit(self.model, t, p)
@@ -143,13 +144,14 @@ class Momentum:
                              charge (au): {q:1.0f}
                              flight time at pz=0 (ns): {t:1.3f}
                              time domain of pz model (ns): {tmin:1.3f} -- {tmax:1.3f}
-                             safe range of pz model (au): -500 -- 500
+                             safe range of pz model (au): -{safe:1.0f} -- {safe:1.0f}
                              pz model error in the domain (au): {pmin:1.3f} -- {pmax:1.3f}""".format(
                 m=as_atomic_mass(mass),
                 q=charge,
                 t=as_nano_sec(acc(0)),
                 tmin=as_nano_sec(t.min()),
                 tmax=as_nano_sec(t.max()),
+                safe=safe,
                 pmin=diff.min(),
                 pmax=diff.max())))
         else:  # electron

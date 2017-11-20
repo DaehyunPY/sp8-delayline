@@ -36,7 +36,6 @@ def rot_mat(th):
                   (sin(th), cos(th))))
 
 
-@curry
 @jit
 def affine_transform(x, y, th=0, x0=0, y0=0, dx=1, dy=1, x1=0, y1=0):
     return (rot_mat(th) @ (x, y) - (x0, y0)) * (dx, dy) + (x1, y1)

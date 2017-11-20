@@ -2,8 +2,8 @@ events:
   filenames:
     - test.root
   treename: resortedData
+partitions: 1024
 prefix: test_
-processes: 4
 
 spectrometer:
   #   Ion2nd                 Ion1st       Electron
