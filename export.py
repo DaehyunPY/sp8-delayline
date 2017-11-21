@@ -8,6 +8,7 @@ from sys import argv
 from typing import Mapping, Iterable, Sequence
 from json import dumps as dump_event
 
+from tqdm import tqdm
 from cytoolz import concat, pipe, unique, partial, map, reduce
 from dask.bag import from_sequence
 from dask.diagnostics import ProgressBar
@@ -116,8 +117,7 @@ def read(treename: str, filename: str) -> Iterable[Mapping]:
     file = TFile(filename, 'READ')
     print("Reading root file: '{}'...".format(filename))
     tree = getattr(file, treename)
-    # n = tree.GetEntries()
-    for entry in tree:
+    for entry in tqdm(tree, total=tree.GetEntries()):
         yield {
             'ions': [
                 {'x': in_milli_meter(getattr(entry, 'IonX{:1d}'.format(i))),
@@ -261,16 +261,17 @@ if __name__ == '__main__':
 
     read_the_tree = partial(read, treename)
     whole_events = from_sequence(filenames).map(read_the_tree).flatten()
-    flatten = (whole_events
-               .map(hit_filter)
-               .filter(nhits_filter)
-               .map(hit_transformer)
-               .filter(master_filter)
+    filtered = (whole_events
+                .map(hit_filter)
+                .filter(nhits_filter)
+                .map(hit_transformer)
+                .filter(master_filter))
+
+    with ProgressBar():
+        cached = filtered.persist()
+    flatten = (cached
                .map(hit_calculator)
                .map(unit_mapper)
                .map(flat_event))
-    # df = flatten.to_dataframe()
     with ProgressBar():
         flatten.map(dump_event).to_textfiles('{}exported_*.json'.format(prefix))
-        # df.to_csv('{}exported_*.csv'.format(prefix))
-        # df.to_hdf('{}exported_*.hdf'.format(prefix), '/data')
