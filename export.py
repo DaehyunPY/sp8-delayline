@@ -94,7 +94,7 @@ def load_config(config: dict) -> None:
     ion_calculators = [
         Momentum(accelerator=ion_acc,
                  magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=ion['mass'], charge=ion['charge'])
+                 mass=ion['mass'], charge=ion['charge']).__call__
         for ion in ions
     ]
     electron_acc = accelerator(
@@ -109,7 +109,7 @@ def load_config(config: dict) -> None:
     electron_calculators = [
         Momentum(accelerator=electron_acc,
                  magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=1, charge=-1)
+                 mass=1, charge=-1).__call__
     ] * electron_nhits
 
 
@@ -144,16 +144,14 @@ def read(treename: str, filename: str) -> Iterable[Mapping]:
 def hit_filter(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
     df_ions = DataFrame(ions)
     where_ions = reduce(and_,
-                        [(fr <= df_ions[k]) & (df_ions[k] <= to)
-                         for k, (fr, to) in ion_hit.items()],
-                        True)
-    df_ions_filtered = df_ions if where_ions is True else df_ions[where_ions]
+                        ((fr <= df_ions[k]) & (df_ions[k] <= to)
+                         for k, (fr, to) in ion_hit.items()))
+    df_ions_filtered = df_ions[where_ions]
     df_electrons = DataFrame(electrons)
     where_electrons = reduce(and_,
-                             [(fr <= df_electrons[k]) & (df_electrons[k] <= to)
-                              for k, (fr, to) in electron_hit.items()],
-                             True)
-    df_electrons_filtered = df_electrons if where_electrons is True else df_electrons[where_electrons]
+                             ((fr <= df_electrons[k]) & (df_electrons[k] <= to)
+                              for k, (fr, to) in electron_hit.items()))
+    df_electrons_filtered = df_electrons[where_electrons]
     return {
         'inhits': len(df_ions_filtered),
         'enhits': len(df_electrons_filtered),
@@ -261,15 +259,11 @@ if __name__ == '__main__':
 
     read_the_tree = partial(read, treename)
     whole_events = from_sequence(filenames).map(read_the_tree).flatten()
-    filtered = (whole_events
-                .map(hit_filter)
-                .filter(nhits_filter)
-                .map(hit_transformer)
-                .filter(master_filter))
-
-    with ProgressBar():
-        cached = filtered.persist()
-    flatten = (cached
+    flatten = (whole_events
+               .map(hit_filter)
+               .filter(nhits_filter)
+               .map(hit_transformer)
+               .filter(master_filter)
                .map(hit_calculator)
                .map(unit_mapper)
                .map(flat_event))
