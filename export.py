@@ -7,7 +7,7 @@ from os import chdir
 from os.path import abspath, dirname
 from sys import argv
 
-from pyspark import SparkContext
+from pyspark import SparkContext, StorageLevel
 from pyspark.sql import SparkSession, Row
 from yaml import load as load_yaml
 from cytoolz import concat, pipe, unique, partial, map, reduce
@@ -237,8 +237,11 @@ if __name__ == '__main__':
     sc = SparkContext()
     spark = SparkSession(sc)
     read_the_tree = partial(read, treename)
-    whole_events = sc.parallelize(filenames).flatMap(read_the_tree).repartition(partitions)
-    flatten = (whole_events
+    storage = StorageLevel(True, True, False, False)
+    whole_events = sc.parallelize(filenames).flatMap(read_the_tree)
+    whole_events.persist(storage)
+    partitioned = whole_events.repartition(partitions)
+    flatten = (partitioned
                .map(hit_filter)
                .filter(nhits_filter)
                .map(hit_transformer)
@@ -246,5 +249,6 @@ if __name__ == '__main__':
                .map(hit_calculator)
                .map(unit_mapper)
                .map(flat_event))
+    flatten.persist(storage)
     df = spark.createDataFrame(flatten)
     df.write.csv('{}exported'.format(prefix), header='true', mode='overwrite')
