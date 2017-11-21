@@ -14,15 +14,15 @@ from cytoolz import concat, pipe, unique, partial, map, reduce
 from pandas import DataFrame
 from tqdm import tqdm
 
-from anatools import (Read, call_with_kwargs, affine_transform, accelerator, Momentum,
-                      with_unit, as_milli_meter, as_nano_sec, as_electron_volt)
+from ROOT import TFile
+from anatools import (call_with_kwargs, affine_transform, accelerator, Momentum,
+                      with_unit, in_milli_meter, as_milli_meter, in_nano_sec, as_nano_sec, as_electron_volt)
 
 
 def load_config(config: dict) -> None:
-    global filenames, treename, partitions, prefix
+    global filenames, treename, prefix
     filenames = pipe(config['events']['filenames'], partial(map, glob), concat, unique, sorted)
     treename = config['events']['treename']
-    partitions = config.get('partitions', 2**6)
     prefix = config.get('prefix', '')
 
     global ion_t0, ion_hit, ion_nhits, electron_t0, electron_hit, electron_nhits
@@ -112,9 +112,27 @@ def load_config(config: dict) -> None:
 
 
 def read(treename: str, filename: str) -> Iterable[Mapping]:
-    with Read(filename) as r:
-        print("Reading root file: '{}'...".format(filename))
-        yield from tqdm(r[treename])
+    file = TFile(filename, 'READ')
+    print("Reading root file: '{}'...".format(filename))
+    tree = getattr(file, treename)
+    for entry in tqdm(tree, total=tree.GetEntries()):
+        yield {
+            'ions': [
+                {'x': in_milli_meter(getattr(entry, 'IonX{:1d}'.format(i))),
+                 'y': in_milli_meter(getattr(entry, 'IonY{:1d}'.format(i))),
+                 't': in_nano_sec(getattr(entry, 'IonT{:1d}'.format(i))),
+                 'flag': getattr(entry, 'IonFlag{:1d}'.format(i))}
+                for i in range(entry.IonNum)
+            ],
+            'electrons': [
+                {'x': in_milli_meter(getattr(entry, 'ElecX{:1d}'.format(i))),
+                 'y': in_milli_meter(getattr(entry, 'ElecY{:1d}'.format(i))),
+                 't': in_nano_sec(getattr(entry, 'ElecT{:1d}'.format(i))),
+                 'flag': getattr(entry, 'ElecFlag{:1d}'.format(i))}
+                for i in range(entry.ElecNum)
+            ]
+        }
+    file.Close()
 
 
 @call_with_kwargs
@@ -237,11 +255,10 @@ if __name__ == '__main__':
     sc = SparkContext()
     spark = SparkSession(sc)
     read_the_tree = partial(read, treename)
-    storage = StorageLevel(True, True, False, False)
+    storage = StorageLevel(useDisk=True, useMemory=True, useOffHeap=False, deserialized=False)
     whole_events = sc.parallelize(filenames).flatMap(read_the_tree)
-    whole_events.persist(storage)
-    partitioned = whole_events.repartition(partitions)
-    flatten = (partitioned
+    # whole_events.persist(storage)
+    flatten = (whole_events
                .map(hit_filter)
                .filter(nhits_filter)
                .map(hit_transformer)
@@ -249,6 +266,6 @@ if __name__ == '__main__':
                .map(hit_calculator)
                .map(unit_mapper)
                .map(flat_event))
-    flatten.persist(storage)
+    # flatten.persist(storage)
     df = spark.createDataFrame(flatten)
     df.write.csv('{}exported'.format(prefix), header='true', mode='overwrite')

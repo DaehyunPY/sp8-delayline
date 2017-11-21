@@ -14,4 +14,5 @@ ENV PYTHONPATH /root/lib
 COPY /anatools /root/lib/anatools
 COPY /export.py /root/lib
 
+EXPOSE 4040
 CMD [ "/usr/bin/python3" ]
