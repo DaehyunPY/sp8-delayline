@@ -6,4 +6,5 @@ cytoolz
 PyYAML
 tqdm
 numba
-pyspark
+dask
+cloudpickle

@@ -1,28 +1,29 @@
-from glob import iglob as glob
-from typing import Mapping, Iterable, Sequence
-from itertools import count, chain
 from collections import ChainMap
+from glob import iglob as glob
+from itertools import count, chain
 from operator import and_
 from os import chdir
 from os.path import abspath, dirname
 from sys import argv
+from typing import Mapping, Iterable, Sequence
+from json import dumps as dump_event
 
-from pyspark import SparkContext, StorageLevel
-from pyspark.sql import SparkSession, Row
-from yaml import load as load_yaml
 from cytoolz import concat, pipe, unique, partial, map, reduce
+from dask.bag import from_sequence
+from dask.diagnostics import ProgressBar
+from numba import jit
 from pandas import DataFrame
-from tqdm import tqdm
+from yaml import load as load_yaml
 
-from anatools import (Read, call_with_kwargs, affine_transform, accelerator, Momentum,
-                      with_unit, as_milli_meter, as_nano_sec, as_electron_volt)
+from ROOT import TFile
+from anatools import (call_with_kwargs, affine_transform, accelerator, Momentum,
+                      with_unit, in_milli_meter, in_nano_sec, as_milli_meter, as_nano_sec, as_electron_volt)
 
 
 def load_config(config: dict) -> None:
-    global filenames, treename, partitions, prefix
+    global filenames, treename, prefix
     filenames = pipe(config['events']['filenames'], partial(map, glob), concat, unique, sorted)
     treename = config['events']['treename']
-    partitions = config.get('partitions', 2**6)
     prefix = config.get('prefix', '')
 
     global ion_t0, ion_hit, ion_nhits, electron_t0, electron_hit, electron_nhits
@@ -112,9 +113,31 @@ def load_config(config: dict) -> None:
 
 
 def read(treename: str, filename: str) -> Iterable[Mapping]:
-    with Read(filename) as r:
-        print("Reading root file: '{}'...".format(filename))
-        yield from tqdm(r[treename])
+    file = TFile(filename, 'READ')
+    print("Reading root file: '{}'...".format(filename))
+    tree = getattr(file, treename)
+    # n = tree.GetEntries()
+    for entry in tree:
+        yield {
+            'ions': [
+                {'x': in_milli_meter(getattr(entry, 'IonX{:1d}'.format(i))),
+                 'y': in_milli_meter(getattr(entry, 'IonY{:1d}'.format(i))),
+                 't': in_nano_sec(getattr(entry, 'IonT{:1d}'.format(i))),
+                 'flag': getattr(entry, 'IonFlag{:1d}'.format(i))}
+                for i in range(entry.IonNum)
+            ],
+            'electrons': [
+                {'x': in_milli_meter(getattr(entry, 'ElecX{:1d}'.format(i))),
+                 'y': in_milli_meter(getattr(entry, 'ElecY{:1d}'.format(i))),
+                 't': in_nano_sec(getattr(entry, 'ElecT{:1d}'.format(i))),
+                 'flag': getattr(entry, 'ElecFlag{:1d}'.format(i))}
+                for i in range(entry.ElecNum)
+            ]
+        }
+    file.Close()
+    # with Read(filename) as r:
+    #     print("Reading root file: '{}'...".format(filename))
+    #     yield from tqdm(r[treename])
 
 
 @call_with_kwargs
@@ -140,6 +163,7 @@ def hit_filter(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
 
 
 @call_with_kwargs
+@jit
 def nhits_filter(inhits: int, enhits: int, ions: Sequence[dict], electrons: Sequence[dict]) -> bool:
     return ion_nhits <= inhits and electron_nhits <= enhits
 
@@ -184,6 +208,7 @@ def hit_calculator(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
     }
 
 
+@jit
 def as_the_units(x: float, y: float, t: float, ke: float, px: float, py: float, pz: float) -> dict:
     return {
         'x': as_milli_meter(x),
@@ -205,7 +230,7 @@ def unit_mapper(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
 
 
 @call_with_kwargs
-def flat_event(ions: Sequence[dict], electrons: Sequence[dict]) -> Row:
+def flat_event(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
     iformat = 'i{}h_{}'.format
     eformat = 'e{}h_{}'.format
     items = dict.items
@@ -217,7 +242,7 @@ def flat_event(ions: Sequence[dict], electrons: Sequence[dict]) -> Row:
         [[eformat(i, k), v] for k, v in items(h) if k in {'x', 'y', 't', 'ke', 'px', 'py', 'pz'}]
         for i, h in zip(count(1), electrons)
     )
-    return Row(**{k: float(v) for k, v in chain(*chain(ihits, ehits))})
+    return dict(chain(*chain(ihits, ehits)))
 
 
 if __name__ == '__main__':
@@ -234,14 +259,9 @@ if __name__ == '__main__':
         config = load_yaml(f)
     load_config(config)
 
-    sc = SparkContext()
-    spark = SparkSession(sc)
     read_the_tree = partial(read, treename)
-    storage = StorageLevel(True, True, False, False)
-    whole_events = sc.parallelize(filenames).flatMap(read_the_tree)
-    whole_events.persist(storage)
-    partitioned = whole_events.repartition(partitions)
-    flatten = (partitioned
+    whole_events = from_sequence(filenames).map(read_the_tree).flatten()
+    flatten = (whole_events
                .map(hit_filter)
                .filter(nhits_filter)
                .map(hit_transformer)
@@ -249,6 +269,8 @@ if __name__ == '__main__':
                .map(hit_calculator)
                .map(unit_mapper)
                .map(flat_event))
-    flatten.persist(storage)
-    df = spark.createDataFrame(flatten)
-    df.write.csv('{}exported'.format(prefix), header='true', mode='overwrite')
+    # df = flatten.to_dataframe()
+    with ProgressBar():
+        flatten.map(dump_event).to_textfiles('{}exported_*.json'.format(prefix))
+        # df.to_csv('{}exported_*.csv'.format(prefix))
+        # df.to_hdf('{}exported_*.hdf'.format(prefix), '/data')

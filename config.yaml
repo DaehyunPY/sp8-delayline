@@ -2,7 +2,6 @@ events:
   filenames:
     - test.root
   treename: resortedData
-partitions: 1024
 prefix: test_
 
 spectrometer:
