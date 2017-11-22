@@ -1,28 +1,27 @@
-from glob import iglob as glob
-from typing import Mapping, Iterable, Sequence
-from itertools import count, chain
 from collections import ChainMap
+from glob import iglob as glob
+from itertools import count, chain
 from operator import and_
 from os import chdir
 from os.path import abspath, dirname
 from sys import argv
+from typing import Sequence
 
+from cytoolz import concat, pipe, unique, partial, map, reduce
+from pandas import DataFrame
 from pyspark import SparkContext
 from pyspark.sql import SparkSession, Row
 from yaml import load as load_yaml
-from cytoolz import concat, pipe, unique, partial, map, reduce
-from pandas import DataFrame
-from tqdm import tqdm
 
-from ROOT import TFile
-from anatools import (call_with_kwargs, affine_transform, accelerator, Momentum,
-                      with_unit, in_milli_meter, as_milli_meter, in_nano_sec, as_nano_sec, as_electron_volt)
+from sp8tools import (call_with_kwargs, affine_transform, accelerator, Momentum, queries, events,
+                      with_unit, as_milli_meter, as_nano_sec, as_electron_volt)
 
 
 def load_config(config: dict) -> None:
-    global filenames, treename, prefix
+    global filenames, treename, chunk_size, prefix
     filenames = pipe(config['events']['filenames'], partial(map, glob), concat, unique, sorted)
     treename = config['events']['treename']
+    chunk_size = config.get('chunk_size', 100000)
     prefix = config.get('prefix', '')
 
     global ion_t0, ion_hit, ion_nhits, electron_t0, electron_hit, electron_nhits
@@ -109,30 +108,6 @@ def load_config(config: dict) -> None:
                  magnetic_filed=spectrometer['uniform_magnetic_field'],
                  mass=1, charge=-1).__call__
     ] * electron_nhits
-
-
-def read(treename: str, filename: str) -> Iterable[Mapping]:
-    file = TFile(filename, 'READ')
-    print("Reading root file: '{}'...".format(filename))
-    tree = getattr(file, treename)
-    for entry in tqdm(tree, total=tree.GetEntries()):
-        yield {
-            'ions': [
-                {'x': in_milli_meter(getattr(entry, 'IonX{:1d}'.format(i))),
-                 'y': in_milli_meter(getattr(entry, 'IonY{:1d}'.format(i))),
-                 't': in_nano_sec(getattr(entry, 'IonT{:1d}'.format(i))),
-                 'flag': getattr(entry, 'IonFlag{:1d}'.format(i))}
-                for i in range(entry.IonNum)
-            ],
-            'electrons': [
-                {'x': in_milli_meter(getattr(entry, 'ElecX{:1d}'.format(i))),
-                 'y': in_milli_meter(getattr(entry, 'ElecY{:1d}'.format(i))),
-                 't': in_nano_sec(getattr(entry, 'ElecT{:1d}'.format(i))),
-                 'flag': getattr(entry, 'ElecFlag{:1d}'.format(i))}
-                for i in range(entry.ElecNum)
-            ]
-        }
-    file.Close()
 
 
 @call_with_kwargs
@@ -252,8 +227,14 @@ if __name__ == '__main__':
 
     sc = SparkContext()
     spark = SparkSession(sc)
-    read_the_tree = partial(read, treename)
-    whole_events = sc.parallelize(filenames).flatMap(read_the_tree)
+    q = [*chain(*(queries(filename, treename, chunk_size) for filename in filenames))]
+    print("Files:")
+    for filename in filenames:
+        print('    {}'.format(filename))
+    print('    Total {} Files'.format(len(filenames)))
+    print("Chunk Size: {}".format(chunk_size))
+    print("Number of Partitions: {}".format(len(q)))
+    whole_events = sc.parallelize(q).flatMap(call_with_kwargs(events))
     flatten = (whole_events
                .map(hit_filter)
                .filter(nhits_filter)

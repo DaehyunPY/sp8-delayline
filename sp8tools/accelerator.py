@@ -2,7 +2,7 @@ from operator import rshift
 from textwrap import dedent
 from typing import Mapping, Callable, Tuple
 
-from cytoolz import memoize, reduce
+from cytoolz import reduce
 from numba import jit
 from numpy import pi, sin, linspace, ndarray
 from scipy.optimize import curve_fit

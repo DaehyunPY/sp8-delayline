@@ -3,6 +3,7 @@ events:
     - test.root
   treename: resortedData
 prefix: test_
+chunk_size: 20000
 
 spectrometer:
   #   Ion2nd                 Ion1st       Electron
