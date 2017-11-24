@@ -216,7 +216,9 @@ if __name__ == '__main__':
         raise ValueError("Usage: program config")
     elif len(argv) == 2:
         config_filename = abspath(argv[1])
-        chdir(dirname(config_filename))
+        working_directory = dirname(config_filename)
+        print("Change working directory to '{}'...".format(working_directory))
+        chdir(working_directory)
     else:
         raise ValueError("Too many arguments!: '{}'".format(argv[1:]))
 
