@@ -24,7 +24,6 @@ try:
         def __getitem__(self, item: str) -> Any:
             return getattr(self.__file, item)
 
-
     @jit
     def partitions(chunk_size: int, n: int):
         if not n > 0:
@@ -37,7 +36,6 @@ try:
                 yield start, n
                 break
 
-
     def queries(filename: str, treename: str, chunk_size: int = None):
         with Read(filename) as f:
             tree: TTree = f[treename]
@@ -49,7 +47,6 @@ try:
                 'start': start,
                 'stop': stop
             }
-
 
     def events(filename: str, treename: str, start: int = 0, stop: int = None, step: int = 1):
         with Read(filename) as f:

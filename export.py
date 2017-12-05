@@ -1,16 +1,15 @@
 from collections import ChainMap
-from glob import iglob as glob
+from glob import glob
 from itertools import count, chain
-from operator import and_
 from os import chdir
 from os.path import abspath, dirname
 from sys import argv
 from typing import Sequence
 
-from cytoolz import concat, pipe, unique, partial, map, reduce
-from pandas import DataFrame
-from pyspark import SparkContext
-from pyspark.sql import SparkSession, Row
+from numba import jit
+from cytoolz import concat, pipe, unique, partial, map, filter
+from dask.bag import from_sequence
+from dask.diagnostics import ProgressBar
 from yaml import load as load_yaml
 
 from sp8tools import (call_with_kwargs, affine_transform, accelerator, Momentum, queries, events,
@@ -21,7 +20,7 @@ def load_config(config: dict) -> None:
     global filenames, treename, chunk_size, prefix
     filenames = pipe(config['events']['filenames'], partial(map, glob), concat, unique, sorted)
     treename = config['events']['treename']
-    chunk_size = config.get('chunk_size', 100000)
+    chunk_size = config.get('chunk_size', 1000000)
     prefix = config.get('prefix', '')
 
     global ion_t0, ion_hit, ion_nhits, electron_t0, electron_hit, electron_nhits
@@ -50,7 +49,7 @@ def load_config(config: dict) -> None:
         'y1': 0
     }
     ion_imgs = [
-        ChainMap({'x1': ion['x_shift'], 'y1': ion['y_shift']}, ion_img) for ion in ions
+        ChainMap({'x1': ion.get('x_shift', 0), 'y1': ion.get('y_shift', 0)}, ion_img) for ion in ions
     ]
     electron_img = {
         'th': with_unit(config['electron']['axis_angle_of_detector']),
@@ -91,7 +90,7 @@ def load_config(config: dict) -> None:
     ion_calculators = [
         Momentum(accelerator=ion_acc,
                  magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=ion['mass'], charge=ion['charge']).__call__
+                 mass=ion['mass'], charge=ion['charge'])
         for ion in ions
     ]
     electron_acc = accelerator(
@@ -106,31 +105,45 @@ def load_config(config: dict) -> None:
     electron_calculators = [
         Momentum(accelerator=electron_acc,
                  magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=1, charge=-1).__call__
+                 mass=1, charge=-1)
     ] * electron_nhits
 
 
+@jit
+def ion_hit_filter(hit: dict) -> bool:
+    for k, (fr, to) in ion_hit.items():
+        if not fr <= hit[k]:
+            return False
+        if not hit[k] <= to:
+            return False
+    return True
+
+
+@jit
+def electron_hit_filter(hit: dict) -> bool:
+    for k, (fr, to) in electron_hit.items():
+        if not fr <= hit[k]:
+            return False
+        if not hit[k] <= to:
+            return False
+    return True
+
+
 @call_with_kwargs
+@jit
 def hit_filter(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
-    df_ions = DataFrame(ions)
-    where_ions = reduce(and_,
-                        ((fr <= df_ions[k]) & (df_ions[k] <= to)
-                         for k, (fr, to) in ion_hit.items()))
-    df_ions_filtered = df_ions[where_ions]
-    df_electrons = DataFrame(electrons)
-    where_electrons = reduce(and_,
-                             ((fr <= df_electrons[k]) & (df_electrons[k] <= to)
-                              for k, (fr, to) in electron_hit.items()))
-    df_electrons_filtered = df_electrons[where_electrons]
+    filtered_ions = list(filter(ion_hit_filter, ions))
+    filtered_electrons = list(filter(electron_hit_filter, electrons))
     return {
-        'inhits': len(df_ions_filtered),
-        'enhits': len(df_electrons_filtered),
-        'ions': df_ions_filtered.to_dict('records'),
-        'electrons': df_electrons_filtered.to_dict('records')
+        'inhits': len(filtered_ions),
+        'enhits': len(filtered_electrons),
+        'ions': filtered_ions,
+        'electrons': filtered_electrons
     }
 
 
 @call_with_kwargs
+@jit
 def nhits_filter(inhits: int, enhits: int, ions: Sequence[dict], electrons: Sequence[dict]) -> bool:
     return ion_nhits <= inhits and electron_nhits <= enhits
 
@@ -175,6 +188,7 @@ def hit_calculator(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
     }
 
 
+@jit
 def as_the_units(x: float, y: float, t: float, ke: float, px: float, py: float, pz: float) -> dict:
     return {
         'x': as_milli_meter(x),
@@ -196,7 +210,7 @@ def unit_mapper(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
 
 
 @call_with_kwargs
-def flat_event(ions: Sequence[dict], electrons: Sequence[dict]) -> Row:
+def flat_event(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
     iformat = 'i{}h_{}'.format
     eformat = 'e{}h_{}'.format
     items = dict.items
@@ -208,7 +222,12 @@ def flat_event(ions: Sequence[dict], electrons: Sequence[dict]) -> Row:
         [[eformat(i, k), v] for k, v in items(h) if k in {'x', 'y', 't', 'ke', 'px', 'py', 'pz'}]
         for i, h in zip(count(1), electrons)
     )
-    return Row(**{k: float(v) for k, v in chain(*chain(ihits, ehits))})
+    return dict(chain(*chain(ihits, ehits)))
+
+
+@call_with_kwargs
+def event_list(*args, **kwargs):
+    return events(*args, **kwargs)
 
 
 if __name__ == '__main__':
@@ -227,24 +246,26 @@ if __name__ == '__main__':
         config = load_yaml(f)
     load_config(config)
 
-    sc = SparkContext()
-    spark = SparkSession(sc)
-    q = [*chain(*(queries(filename, treename, chunk_size) for filename in filenames))]
+    que = [*chain(*(queries(filename, treename, chunk_size) for filename in filenames))]
     print("Files:")
     for filename in filenames:
         print('    {}'.format(filename))
     print('    Total {} Files'.format(len(filenames)))
     print("Chunk Size: {}".format(chunk_size))
-    print("Number of Partitions: {}".format(len(q)))
-    whole_events = sc.parallelize(q).flatMap(call_with_kwargs(events))
-    flatten = (whole_events
-               .map(hit_filter)
-               .filter(nhits_filter)
-               .map(hit_transformer)
-               .filter(master_filter)
-               .map(hit_calculator)
-               .map(unit_mapper)
-               .map(flat_event))
-    df = spark.createDataFrame(flatten)
-    # print(df.show())
-    df.write.csv('{}exported'.format(prefix), header='true', mode='overwrite')
+    print("Number of ROOT Partitions: {}".format(len(que)))
+
+    whole_events = from_sequence(que).map(event_list).flatten()
+    print("Number of Dask Partitions: {}".format(whole_events.npartitions))
+    calculated = (
+        whole_events
+            .map(hit_filter)
+            .filter(nhits_filter)
+            .map(hit_transformer)
+            .filter(master_filter)
+            .map(hit_calculator)
+            .map(unit_mapper)
+    )
+    with ProgressBar():
+        calculated.map(flat_event).to_dataframe().to_csv('{}exported-*.csv'.format(prefix))
+        # from json import dumps as dump_json
+        # calculated.map(dump_json).to_textfiles('{}exported-*.json'.format(prefix))
