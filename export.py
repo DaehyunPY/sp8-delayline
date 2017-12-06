@@ -10,6 +10,7 @@ from numba import jit
 from cytoolz import concat, pipe, unique, partial, map, filter
 from dask.bag import from_sequence
 from dask.diagnostics import ProgressBar
+from dask.multiprocessing import get as multiprocessing_get
 from yaml import load as load_yaml
 
 from sp8tools import (call_with_kwargs, affine_transform, accelerator, Momentum, queries, events,
@@ -266,6 +267,6 @@ if __name__ == '__main__':
             .map(unit_mapper)
     )
     with ProgressBar():
-        calculated.map(flat_event).to_dataframe().to_csv('{}exported-*.csv'.format(prefix))
+        calculated.map(flat_event).to_dataframe().to_csv('{}exported-*.csv'.format(prefix), get=multiprocessing_get)
         # from json import dumps as dump_json
         # calculated.map(dump_json).to_textfiles('{}exported-*.json'.format(prefix))
