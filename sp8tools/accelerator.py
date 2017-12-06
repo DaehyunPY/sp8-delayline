@@ -131,8 +131,7 @@ class Momentum:
         self.__charge = charge
         self.__magnetic_filed = magnetic_filed
         if mass > 1:  # ion
-            ratio = (mass/charge)**0.5
-            safe = ratio*2.5//100*100
+            safe = abs(mass*charge)**0.5*2.5//100*100
             p = linspace(-safe, safe, num=1001)
             acc = accelerator(mass=mass, charge=charge)
             t: ndarray = acc(p)
@@ -144,8 +143,8 @@ class Momentum:
                              charge (au): {q:1.0f}
                              flight time at pz=0 (ns): {t:1.3f}
                              time domain of pz model (ns): {tmin:1.3f} -- {tmax:1.3f}
-                             safe range of pz model (au): -{safe:1.0f} -- {safe:1.0f}
-                             pz model error in the domain (au): {pmin:1.3f} -- {pmax:1.3f}""".format(
+                             safe region of pz model (au): -{safe:1.0f} -- {safe:1.0f}
+                             pz error in the domain (au): {pmin:1.3f} -- {pmax:1.3f}""".format(
                 m=as_atomic_mass(mass),
                 q=charge,
                 t=as_nano_sec(acc(0)),
@@ -166,8 +165,8 @@ class Momentum:
                              charge (au): {q:1.0f}
                              flight time at pz=0 (ns): {t:1.3f}
                              time domain of pz model (ns): {tmin:1.3f} -- {tmax:1.3f}
-                             safe range of pz model (au): -5 -- 5
-                             pz model error in the domain (au): {pmin:1.3f} -- {pmax:1.3f}""".format(
+                             safe region of pz model (au): -5 -- 5
+                             pz error in the domain (au): {pmin:1.3f} -- {pmax:1.3f}""".format(
                 m=mass,
                 q=charge,
                 t=as_nano_sec(acc(0)),
@@ -197,9 +196,8 @@ class Momentum:
 
     @staticmethod
     @jit
-    def model(t, a9: float, a8: float, a7: float, a6: float, a5: float, a4: float,
-              a3: float, a2: float, a1: float, a0: float):
-        return (a9 * t ** 9 + a8 * t ** 8 + a7 * t ** 7 + a6 * t ** 6 + a5 * t ** 5 +
+    def model(t, a7: float, a6: float, a5: float, a4: float, a3: float, a2: float, a1: float, a0: float):
+        return (a7 * t ** 7 + a6 * t ** 6 + a5 * t ** 5 +
                 a4 * t ** 4 + a3 * t ** 3 + a2 * t ** 2 + a1 * t + a0)
 
     @property
