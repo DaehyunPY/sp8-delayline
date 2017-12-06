@@ -1,6 +1,7 @@
 from itertools import count
 from typing import Any
 
+from tqdm import tqdm
 from cytoolz import compose
 from numba import jit
 
@@ -56,7 +57,7 @@ try:
             get = tree.GetEntry
             iattr = compose(tree.__getattr__, 'Ion{}'.format)
             eattr = compose(tree.__getattr__, 'Elec{}'.format)
-            for entry in range(start, stop, step):
+            for entry in tqdm(range(start, stop, step)):
                 get(entry)
                 yield {
                     'ions': [

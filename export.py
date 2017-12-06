@@ -13,8 +13,8 @@ from dask.diagnostics import ProgressBar
 from dask.multiprocessing import get as multiprocessing_get
 from yaml import load as load_yaml
 
-from sp8tools import (call_with_kwargs, affine_transform, accelerator, Momentum, queries, events,
-                      with_unit, as_milli_meter, as_nano_sec, as_electron_volt)
+from sp8tools import (call_with_kwargs, affine_transform, accelerator, Momentum, queries, events, with_unit,
+                      as_milli_meter, as_nano_sec, as_electron_volt)
 
 
 def load_config(config: dict) -> None:
@@ -91,7 +91,7 @@ def load_config(config: dict) -> None:
     ion_calculators = [
         Momentum(accelerator=ion_acc,
                  magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=ion['mass'], charge=ion['charge'])
+                 mass=ion['mass'], charge=ion['charge']).__call__
         for ion in ions
     ]
     electron_acc = accelerator(
@@ -106,7 +106,7 @@ def load_config(config: dict) -> None:
     electron_calculators = [
         Momentum(accelerator=electron_acc,
                  magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=1, charge=-1)
+                 mass=1, charge=-1).__call__
     ] * electron_nhits
 
 
@@ -255,8 +255,24 @@ if __name__ == '__main__':
     print("Chunk Size: {}".format(chunk_size))
     print("Number of ROOT Partitions: {}".format(len(que)))
 
+    # from tqdm import tqdm
+    # calculated = pipe(
+    #     que,
+    #     partial(map, event_list),
+    #     concat,
+    #     # tqdm,
+    #     partial(map, hit_filter),
+    #     partial(filter, nhits_filter),
+    #     partial(map, hit_transformer),
+    #     partial(filter, master_filter),
+    #     partial(map, hit_calculator),
+    #     partial(map, unit_mapper),
+    #     # tqdm
+    # )
+    # for hit in calculated:
+    #     continue
+
     whole_events = from_sequence(que).map(event_list).flatten()
-    print("Number of Dask Partitions: {}".format(whole_events.npartitions))
     calculated = (
         whole_events
             .map(hit_filter)
