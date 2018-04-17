@@ -1,9 +1,10 @@
 from numba import jit
 from numpy import pi
 
-__all__ = ('in_degree', 'as_degree', 'in_nano_sec', 'as_nano_sec', 'in_milli_meter', 'as_milli_meter',
-           'in_volt', 'as_volt', 'in_gauss', 'as_gauss', 'in_electron_volt', 'as_electron_volt', 'in_atomic_mass',
-           'as_atomic_mass', 'with_unit')
+__all__ = ('in_degree', 'as_degree', 'in_nano_sec', 'as_nano_sec', 'in_femto_sec', 'as_femto_sec',
+           'in_milli_meter', 'as_milli_meter',
+           'in_volt', 'as_volt', 'in_gauss', 'as_gauss', 'in_electron_volt', 'as_electron_volt',
+           'in_atomic_mass', 'as_atomic_mass', 'with_unit')
 
 
 ma = 1.66053892173e-27  # atomic mass
@@ -35,6 +36,16 @@ def in_nano_sec(v):
 @jit
 def as_nano_sec(v):
     return v / 1e-9 / hartree * hbar
+
+
+@jit
+def as_femto_sec(v):
+    return v / 1e-15 / hartree * hbar
+
+
+@jit
+def in_femto_sec(v):
+    return v * 1e-15 * hartree / hbar
 
 
 @jit
@@ -90,6 +101,8 @@ def with_unit(inp: str) -> float:
         return in_degree(num)
     elif unit == 'ns':
         return in_nano_sec(num)
+    elif unit == 'fs':
+        return in_femto_sec(num)
     elif unit == 'mm':
         return in_milli_meter(num)
     elif unit == 'V':
