@@ -6,6 +6,7 @@ from os.path import abspath, dirname
 from sys import argv
 from typing import Sequence
 
+from numpy import nan
 from numba import jit
 from cytoolz import concat, pipe, unique, partial, map, filter
 from dask.bag import from_sequence
@@ -13,8 +14,9 @@ from dask.diagnostics import ProgressBar
 from dask.multiprocessing import get as multiprocessing_get
 from yaml import load as load_yaml
 
-from sp8tools import (call_with_kwargs, affine_transform, accelerator, Momentum, queries, events, with_unit,
-                      as_milli_meter, as_nano_sec, as_electron_volt)
+from sp8tools import (call_with_kwargs, affine_transform, queries, events, with_unit,
+                      as_milli_meter, as_nano_sec, as_electron_volt, uniform_electric_field, none_field,
+                      ion_spectrometer, electron_spectrometer, Hit)
 
 
 def load_config(config: dict) -> None:
@@ -73,40 +75,38 @@ def load_config(config: dict) -> None:
 
     global ion_calculators, electron_calculators
     spectrometer = {k: with_unit(v) for k, v in config['spectrometer'].items()}
-    ion_acc = accelerator(
-        {'electric_filed': ((spectrometer['electric_potential_of_Electron'] -
-                             spectrometer['electric_potential_of_Ion1nd']) /
-                            (spectrometer['length_of_LReg'] +
-                             spectrometer['length_of_DReg'])),
-         'length': spectrometer['length_of_LReg']},
-        {'electric_filed': ((spectrometer['electric_potential_of_Ion1nd'] -
-                             spectrometer['electric_potential_of_Ion2nd']) /
-                            spectrometer['length_of_AccReg']),
-         'length': spectrometer['length_of_AccReg']},
-        {'electric_filed': ((spectrometer['electric_potential_of_Ion2nd'] -
-                             spectrometer['electric_potential_of_IonMCP']) /
-                            spectrometer['length_of_GepReg']),
-         'length': spectrometer['length_of_GepReg']}
-    )
+    ion_acc = (
+            uniform_electric_field(length=spectrometer['length_of_GepReg'],
+                                   electric_field=(
+                                           (spectrometer['electric_potential_of_Ion2nd'] -
+                                            spectrometer['electric_potential_of_IonMCP']) /
+                                           spectrometer['length_of_GepReg'])) *
+            uniform_electric_field(length=spectrometer['length_of_AccReg'],
+                                         electric_field=(
+                                                 (spectrometer['electric_potential_of_Ion1nd'] -
+                                                  spectrometer['electric_potential_of_Ion2nd']) /
+                                                 spectrometer['length_of_AccReg'])) *
+            uniform_electric_field(length=spectrometer['length_of_LReg'],
+                                   electric_field=(
+                                           (spectrometer['electric_potential_of_Electron'] -
+                                            spectrometer['electric_potential_of_Ion1nd']) /
+                                           (spectrometer['length_of_LReg'] +
+                                            spectrometer['length_of_DReg']))))
     ion_calculators = [
-        Momentum(accelerator=ion_acc,
-                 magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=ion['mass'], charge=ion['charge']).__call__
+        ion_spectrometer(ion_acc, mass=ion['mass'], charge=ion['charge'])
+        if 'mass' in ion else None
         for ion in ions
     ]
-    electron_acc = accelerator(
-        {'electric_filed': ((spectrometer['electric_potential_of_Ion1nd'] -
-                             spectrometer['electric_potential_of_Electron']) /
-                            (spectrometer['length_of_LReg'] +
-                             spectrometer['length_of_DReg'])),
-         'length': spectrometer['length_of_DReg']},
-        {'electric_filed': 0,
-         'length': spectrometer['length_of_DraftReg']}
-    )
+    ele_acc = (
+            none_field(length=spectrometer['length_of_DReg']) *
+            uniform_electric_field(length=spectrometer['length_of_DReg'],
+                                   electric_field=(
+                                           (spectrometer['electric_potential_of_Ion1nd'] -
+                                            spectrometer['electric_potential_of_Electron']) /
+                                           (spectrometer['length_of_LReg'] +
+                                            spectrometer['length_of_DReg']))))
     electron_calculators = [
-        Momentum(accelerator=electron_acc,
-                 magnetic_filed=spectrometer['uniform_magnetic_field'],
-                 mass=1, charge=-1).__call__
+        electron_spectrometer(ele_acc, magnetic_filed=spectrometer['uniform_magnetic_field'])
     ] * electron_nhits
 
 
@@ -180,10 +180,11 @@ def master_filter(ions: Sequence[dict], electrons: Sequence[dict]) -> bool:
 def hit_calculator(ions: Sequence[dict], electrons: Sequence[dict]) -> dict:
     return {
         'ions': [
-            {**h, **dict(zip(['ke', 'px', 'py', 'pz'], f(h['x'], h['y'], h['t'])))}
+            {**h, **f(Hit(**h))._asdict()}
+            if f is not None else {**h, **dict(zip(['ke', 'px', 'py', 'pz'], (nan, nan, nan, nan)))}
             for h, f in zip(ions, ion_calculators)],
         'electrons': [
-            {**h, **dict(zip(['ke', 'px', 'py', 'pz'], f(h['x'], h['y'], h['t'])))}
+            {**h, **f(Hit(**h))._asdict()}
             for h, f in zip(electrons, electron_calculators)
         ]
     }

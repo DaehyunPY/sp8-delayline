@@ -8,7 +8,7 @@ from .others import rot_mat
 from .units import as_atomic_mass, as_nano_sec, as_electron_volt
 
 
-__all__ = ('none_field', 'uniform_electric_field', 'ion_spectrometer', 'electron_spectrometer')
+__all__ = ('Hit', 'none_field', 'uniform_electric_field', 'ion_spectrometer', 'electron_spectrometer')
 
 
 class Hit(NamedTuple):
