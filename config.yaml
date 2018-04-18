@@ -2,7 +2,7 @@ events:
   filenames:
     - /mnt/analysis/SPring-8/2017A/11_N2_437eV_high-M/resort_ono/ResortLess*.root
   treename: resortedData
-chunk_size: 10000
+chunk_size: 1000000
 prefix: test_
 
 spectrometer:

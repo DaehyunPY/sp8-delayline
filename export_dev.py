@@ -1,7 +1,10 @@
 from os import chdir
 from os.path import abspath, dirname
 from sys import argv
+from glob import iglob
+from itertools import chain
 
+from cytoolz import unique
 from yaml import load as load_yaml
 
 from sp8tools import with_unit, none_field, uniform_electric_field, ion_spectrometer, electron_spectrometer
@@ -22,6 +25,14 @@ if __name__ == '__main__':
         print("Reading config file: '{}'...".format(config_filename))
         config = load_yaml(f)
 
+    # read events
+    globbed = (iglob(f) for f in config['events']['filenames'])
+    filenames = sorted(unique(chain(*globbed)))
+    treename = config['events']['treename']
+    chunk_size = config.get('chunk_size', 1000000)
+    prefix = config.get('prefix', '')
+
+    # read spectrometer
     spectrometer = {k: with_unit(v) for k, v in config['spectrometer'].items()}
     ion_acc = (
             uniform_electric_field(length=spectrometer['length_of_GepReg'],
@@ -40,7 +51,6 @@ if __name__ == '__main__':
                                             spectrometer['electric_potential_of_Ion1nd']) /
                                            (spectrometer['length_of_LReg'] +
                                             spectrometer['length_of_DReg']))))
-
     ele_acc = (
             none_field(length=spectrometer['length_of_DReg']) *
             uniform_electric_field(length=spectrometer['length_of_DReg'],

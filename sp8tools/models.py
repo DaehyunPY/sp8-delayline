@@ -1,6 +1,6 @@
 from typing import Callable, Optional, NewType, NamedTuple
 
-from numpy import linspace, vectorize, log, pi, sin
+from numpy import linspace, vectorize, log, pi, sin, array, float64
 from scipy.optimize import curve_fit
 from numba import jit
 
@@ -132,7 +132,8 @@ ion model summary
 time domain of pz model (ns): {tmin:10.3f} -- {tmax:10.3f}
  safe range of pz model (au): {pmin: 6.0f}     -- {pmax:6.0f}
 safe max kinetic energy (eV): {kmax:10.3f}
- pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}""".format(
+ pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}
+ ------------------------------------------------------""".format(
         mass_u=as_atomic_mass(mass),
         mass_au=mass,
         charge=charge,
@@ -167,7 +168,8 @@ electron model summary
 time domain of pz model (ns): {tmin:10.3f} -- {tmax:10.3f}
  safe range of pz model (au): {pmin: 6.0f}     -- {pmax:6.0f}
 safe max kinetic energy (eV): {kmax:10.3f}
- pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}""".format(
+ pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}
+ ------------------------------------------------------""".format(
         flight=as_nano_sec(accelerator(0, mass=1, charge=-1).flight_time),
         tmin=as_nano_sec(t.min()),
         tmax=as_nano_sec(t.max()),
@@ -187,7 +189,7 @@ safe max kinetic energy (eV): {kmax:10.3f}
             th = (freq * hit.t / 2) % pi
             pr = -magnetic_filed / 2 / sin(th)
         pz = pz_model(hit.t, opt[0], opt[1], opt[2], opt[3], opt[4], opt[5])
-        px, py = rot_mat(th) @ (hit.x, hit.y) * pr
+        px, py = rot_mat(th) @ array((hit.x, hit.y), dtype=float64) * pr
         ke = (px ** 2 + py ** 2 + pz ** 2) / 2
         return AnalyzedHit(px=px, py=py, pz=pz, ke=ke)
     return model
