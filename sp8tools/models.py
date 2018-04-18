@@ -133,7 +133,7 @@ time domain of pz model (ns): {tmin:10.3f} -- {tmax:10.3f}
  safe range of pz model (au): {pmin: 6.0f}     -- {pmax:6.0f}
 safe max kinetic energy (eV): {kmax:10.3f}
  pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}
- ------------------------------------------------------""".format(
+------------------------------------------------------""".format(
         mass_u=as_atomic_mass(mass),
         mass_au=mass,
         charge=charge,
@@ -169,7 +169,7 @@ time domain of pz model (ns): {tmin:10.3f} -- {tmax:10.3f}
  safe range of pz model (au): {pmin: 6.0f}     -- {pmax:6.0f}
 safe max kinetic energy (eV): {kmax:10.3f}
  pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}
- ------------------------------------------------------""".format(
+------------------------------------------------------""".format(
         flight=as_nano_sec(accelerator(0, mass=1, charge=-1).flight_time),
         tmin=as_nano_sec(t.min()),
         tmax=as_nano_sec(t.max()),
