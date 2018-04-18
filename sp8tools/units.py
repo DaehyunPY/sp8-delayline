@@ -1,9 +1,8 @@
 from numba import jit
 from numpy import pi
 
-__all__ = ('in_degree', 'as_degree', 'in_nano_sec', 'as_nano_sec', 'in_femto_sec', 'as_femto_sec',
-           'in_milli_meter', 'as_milli_meter',
-           'in_volt', 'as_volt', 'in_gauss', 'as_gauss', 'in_electron_volt', 'as_electron_volt',
+__all__ = ('in_degree', 'as_degree', 'in_nano_sec', 'as_nano_sec', 'in_femto_sec', 'as_femto_sec', 'in_milli_meter',
+           'as_milli_meter', 'in_volt', 'as_volt', 'in_gauss', 'as_gauss', 'in_electron_volt', 'as_electron_volt',
            'in_atomic_mass', 'as_atomic_mass', 'with_unit')
 
 
@@ -18,82 +17,82 @@ bohr = hbar / me / c / alpha
 hartree = alpha ** 2 * me * c ** 2
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def in_degree(v):
     return v * pi / 180
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def as_degree(v):
     return v / pi * 180
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def in_nano_sec(v):
     return v * 1e-9 * hartree / hbar
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def as_nano_sec(v):
     return v / 1e-9 / hartree * hbar
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def as_femto_sec(v):
     return v / 1e-15 / hartree * hbar
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def in_femto_sec(v):
     return v * 1e-15 * hartree / hbar
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def in_milli_meter(v):
     return v * 1e-3 / bohr
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def as_milli_meter(v):
     return v / 1e-3 * bohr
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def in_volt(v):
     return v * e / hartree
 in_electron_volt = in_volt
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def as_volt(v):
     return v / e * hartree
 as_electron_volt = as_volt
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def in_gauss(v):
     return v * 1e-4 * e * bohr**2 / hbar
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def as_gauss(v):
     return v / 1e-4 / e / bohr**2 * hbar
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def in_atomic_mass(v):
     return v * ma / me
 
 
-@jit
+@jit(nopython=True, nogil=True)
 def as_atomic_mass(v):
     return v / ma * me
 
 
-@jit
+@jit(nogil=True)
 def with_unit(inp: str) -> float:
-    num_, unit = inp.split()
-    num = float(num_)
+    num_str, unit = inp.split()
+    num = float(num_str)
 
     if unit == 'au':
         return num
