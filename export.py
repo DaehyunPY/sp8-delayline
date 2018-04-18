@@ -82,7 +82,7 @@ def load_config(config: dict) -> None:
                                             spectrometer['electric_potential_of_IonMCP']) /
                                            spectrometer['length_of_GepReg'])) *
             uniform_electric_field(length=spectrometer['length_of_AccReg'],
-                                         electric_field=(
+                                   electric_field=(
                                                  (spectrometer['electric_potential_of_Ion1nd'] -
                                                   spectrometer['electric_potential_of_Ion2nd']) /
                                                  spectrometer['length_of_AccReg'])) *
@@ -98,7 +98,7 @@ def load_config(config: dict) -> None:
         for ion in ions
     ]
     ele_acc = (
-            none_field(length=spectrometer['length_of_DReg']) *
+            none_field(length=spectrometer['length_of_DraftReg']) *
             uniform_electric_field(length=spectrometer['length_of_DReg'],
                                    electric_field=(
                                            (spectrometer['electric_potential_of_Ion1nd'] -
