@@ -6,12 +6,12 @@ from os.path import abspath, dirname
 from sys import argv
 from typing import Sequence
 
-from numpy import nan
-from numba import jit
 from cytoolz import concat, pipe, unique, partial, map, filter
 from dask.bag import from_sequence
 from dask.diagnostics import ProgressBar
 from dask.multiprocessing import get as multiprocessing_get
+from numba import jit
+from numpy import nan
 from yaml import load as load_yaml
 
 from sp8tools import (call_with_kwargs, affine_transform, queries, events, with_unit,
@@ -93,7 +93,7 @@ def load_config(config: dict) -> None:
                                            (spectrometer['length_of_LReg'] +
                                             spectrometer['length_of_DReg']))))
     ion_calculators = [
-        ion_spectrometer(ion_acc, mass=ion['mass'], charge=ion['charge'])
+        ion_spectrometer(ion_acc, mass=ion['mass'], charge=ion['charge'], safe_pz_range=ion.get('safe_pz_range', 400))
         if 'mass' in ion else None
         for ion in ions
     ]
