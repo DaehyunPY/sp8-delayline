@@ -185,9 +185,8 @@ safe max kinetic energy (eV): {kmax:10.3f}
             th = 0
             pr = 1 / hit.t
         else:
-            freq = -magnetic_filed
-            th = (freq * hit.t / 2) % pi
-            pr = -magnetic_filed / 2 / sin(th)
+            th = (magnetic_filed * hit.t / 2) % pi
+            pr = magnetic_filed / 2 / sin(th)
         pz = pz_model(hit.t, opt[0], opt[1], opt[2], opt[3], opt[4], opt[5])
         px, py = rot_mat(th) @ array((hit.x, hit.y), dtype=float64) * pr
         ke = (px ** 2 + py ** 2 + pz ** 2) / 2
