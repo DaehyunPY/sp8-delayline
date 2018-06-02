@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 from numba import jit
 
 from .others import rot_mat
-from .units import as_atomic_mass, as_nano_sec, as_electron_volt
+from .units import to_atomic_mass, to_nano_sec, to_electron_volt, in_milli_meter, in_nano_sec
 
 
 __all__ = ('Hit', 'none_field', 'uniform_electric_field', 'ion_spectrometer', 'electron_spectrometer')
@@ -19,6 +19,17 @@ class Hit(NamedTuple):
     x: float
     y: float
 
+    @staticmethod
+    def in_experimental_units(t: float, x: float, y: float) -> 'Hit':
+        """
+        Initialize `Hit` in the experimental units: 'ns' for `t`, and 'mm' for `x` and `y`
+        :param t: flight time
+        :param x: detected x position
+        :param y: detected y position
+        :return: `Hit`
+        """
+        return Hit(t=in_nano_sec(t), x=in_milli_meter(x), y=in_milli_meter(y))
+
 
 class AnalyzedHit(NamedTuple):
     """
@@ -28,6 +39,14 @@ class AnalyzedHit(NamedTuple):
     py: float
     pz: float
     ke: float
+
+    def to_experimental_units(self) -> dict:
+        """
+        Return momentum and kinetic energy converted to the experimental units: 'au' for momentums `px`, `py` and `pz`,
+        and 'eV' for kinetic energy `ke`
+        :return: `dict`
+        """
+        return {'px': self.px, 'py': self.py, 'pz': self.pz, 'ke': to_electron_volt(self.ke)}
 
 
 Model = NewType('Model', Callable[[Hit], Optional[AnalyzedHit]])
@@ -134,15 +153,15 @@ time domain of pz model (ns): {tmin:10.3f} -- {tmax:10.3f}
 safe max kinetic energy (eV): {kmax:10.3f}
  pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}
 ------------------------------------------------------""".format(
-        mass_u=as_atomic_mass(mass),
+        mass_u=to_atomic_mass(mass),
         mass_au=mass,
         charge=charge,
-        flight=as_nano_sec(accelerator(0, mass=mass, charge=charge).flight_time),
-        tmin=as_nano_sec(t.min()),
-        tmax=as_nano_sec(t.max()),
+        flight=to_nano_sec(accelerator(0, mass=mass, charge=charge).flight_time),
+        tmin=to_nano_sec(t.min()),
+        tmax=to_nano_sec(t.max()),
         pmin=-safe_pz_range,
         pmax=safe_pz_range,
-        kmax=as_electron_volt(safe_pz_range ** 2 / 2 / mass),
+        kmax=to_electron_volt(safe_pz_range ** 2 / 2 / mass),
         dmin=diff.min(),
         dmax=diff.max()))
 
@@ -170,12 +189,12 @@ time domain of pz model (ns): {tmin:10.3f} -- {tmax:10.3f}
 safe max kinetic energy (eV): {kmax:10.3f}
  pz error in the domain (au): {dmin: 10.3f} -- {dmax:10.3f}
 ------------------------------------------------------""".format(
-        flight=as_nano_sec(accelerator(0, mass=1, charge=-1).flight_time),
-        tmin=as_nano_sec(t.min()),
-        tmax=as_nano_sec(t.max()),
+        flight=to_nano_sec(accelerator(0, mass=1, charge=-1).flight_time),
+        tmin=to_nano_sec(t.min()),
+        tmax=to_nano_sec(t.max()),
         pmin=-safe_pz_range,
         pmax=safe_pz_range,
-        kmax=as_electron_volt(safe_pz_range ** 2 / 2),
+        kmax=to_electron_volt(safe_pz_range ** 2 / 2),
         dmin=diff.min(),
         dmax=diff.max()))
 

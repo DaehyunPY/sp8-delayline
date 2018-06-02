@@ -1,9 +1,11 @@
-from numba import jit
-from numpy import pi
+from math import pi
 
-__all__ = ('in_degree', 'as_degree', 'in_nano_sec', 'as_nano_sec', 'in_femto_sec', 'as_femto_sec', 'in_milli_meter',
-           'as_milli_meter', 'in_volt', 'as_volt', 'in_gauss', 'as_gauss', 'in_electron_volt', 'as_electron_volt',
-           'in_atomic_mass', 'as_atomic_mass', 'with_unit')
+from numba import jit
+
+
+__all__ = ('in_degree', 'to_degree', 'in_nano_sec', 'to_nano_sec', 'in_femto_sec', 'to_femto_sec', 'in_milli_meter',
+           'to_milli_meter', 'in_volt', 'to_volt', 'in_gauss', 'to_gauss', 'in_electron_volt', 'to_electron_volt',
+           'in_atomic_mass', 'to_atomic_mass', 'unformat_to_num')
 
 
 ma = 1.66053892173e-27  # atomic mass
@@ -23,7 +25,7 @@ def in_degree(v):
 
 
 @jit(nopython=True, nogil=True)
-def as_degree(v):
+def to_degree(v):
     return v / pi * 180
 
 
@@ -33,12 +35,12 @@ def in_nano_sec(v):
 
 
 @jit(nopython=True, nogil=True)
-def as_nano_sec(v):
+def to_nano_sec(v):
     return v / 1e-9 / hartree * hbar
 
 
 @jit(nopython=True, nogil=True)
-def as_femto_sec(v):
+def to_femto_sec(v):
     return v / 1e-15 / hartree * hbar
 
 
@@ -53,7 +55,7 @@ def in_milli_meter(v):
 
 
 @jit(nopython=True, nogil=True)
-def as_milli_meter(v):
+def to_milli_meter(v):
     return v / 1e-3 * bohr
 
 
@@ -64,9 +66,9 @@ in_electron_volt = in_volt
 
 
 @jit(nopython=True, nogil=True)
-def as_volt(v):
+def to_volt(v):
     return v / e * hartree
-as_electron_volt = as_volt
+to_electron_volt = to_volt
 
 
 @jit(nopython=True, nogil=True)
@@ -75,7 +77,7 @@ def in_gauss(v):
 
 
 @jit(nopython=True, nogil=True)
-def as_gauss(v):
+def to_gauss(v):
     return v / 1e-4 / e / bohr**2 * hbar
 
 
@@ -85,12 +87,12 @@ def in_atomic_mass(v):
 
 
 @jit(nopython=True, nogil=True)
-def as_atomic_mass(v):
+def to_atomic_mass(v):
     return v / ma * me
 
 
 @jit(nogil=True)
-def with_unit(inp: str) -> float:
+def unformat_to_num(inp: str) -> float:
     num_str, unit = inp.split()
     num = float(num_str)
 

@@ -1,33 +1,8 @@
-from typing import Mapping, Callable, Sequence, TypeVar, Any
-
-from cytoolz import curry
 from numba import jit
 from numpy import array, sin, cos, float64, ndarray
 
-__all__ = ('call', 'call_with_args', 'call_with_kwargs', 'is_between', 'rot_mat', 'affine_transform')
 
-T = TypeVar('T')
-
-
-@curry
-@jit
-def call(f: Callable[[T], Any], arg: T):
-    return f(arg)
-
-
-@curry
-def call_with_args(f: Callable[[Sequence], Any], args: Sequence):
-    return f(*args)
-
-
-@curry
-def call_with_kwargs(f: Callable[[Mapping], Any], kwargs: Mapping):
-    return f(**kwargs)
-
-
-@curry
-def is_between(fr, to, v):
-    return (fr <= v) & (v <= to)
+__all__ = ('rot_mat', 'affine_transform')
 
 
 @jit(nopython=True, nogil=True)

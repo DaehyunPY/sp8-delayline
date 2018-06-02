@@ -1,4 +1,7 @@
 *.root
 *.json
+exported*
+dev*
+playground*
 .idea
 __pycache__
