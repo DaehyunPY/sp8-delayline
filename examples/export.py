@@ -15,7 +15,7 @@ from sp8tools import (in_degree, in_milli_meter, in_electron_volt, in_gauss, Hit
                       uniform_electric_field, none_field, ion_spectrometer, electron_spectrometer)
 
 
-# %% parser
+# %% parser & parameters
 parser = ArgumentParser(prog='sp8export', description="""\
 Export SP8 analyzed data.""")
 parser.add_argument('rootfiles', metavar='filename', type=str, nargs='+',
@@ -23,6 +23,8 @@ parser.add_argument('rootfiles', metavar='filename', type=str, nargs='+',
 parser.add_argument('-o', '--output', metavar='filename', type=str, default='exported.parquet',
                     help='filename where to export analyzed data')
 args = parser.parse_args()
+targetfiles = args.rootfiles
+save_as = args.output
 
 
 # %% initialize spark builder
@@ -30,6 +32,9 @@ builder = (SparkSession
            .builder
            .appName(parser.prog)
            .config("spark.jars.packages", "org.diana-hep:spark-root_2.11:0.1.15")
+           .config("spark.cores.max", 11)
+           .config("spark.executor.cores", 5)
+           .config("spark.executor.memory", "4g")
            )
 
 
@@ -95,7 +100,7 @@ def analyse_ehits(hits: List[dict]) -> List[dict]:
 
 # %% connect to spark master & read root files
 with builder.getOrCreate() as spark:
-    globbed = (iglob(f) for f in args.rootfiles)
+    globbed = (iglob(f) for f in targetfiles)
     filenames = sorted(set(chain.from_iterable(globbed)))
     loaded = (spark.read.format("org.dianahep.sparkroot").load(f) for f in filenames)
     df = reduce(DataFrame.union, loaded)
@@ -126,4 +131,8 @@ with builder.getOrCreate() as spark:
                 .withColumn('ehits', analyse_ehits('ehits'))
                 .filter(0 < size('ehits'))
                 )
-    analyzed.write.parquet(args.output)
+    (analyzed
+     .write
+     .option("maxRecordsPerFile", 10000)  # less than 10 MB assuming a record of 1 KB,
+     .parquet(save_as)
+     )
