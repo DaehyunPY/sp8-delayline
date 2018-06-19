@@ -2,18 +2,17 @@
 
 # %% import
 from argparse import ArgumentParser
+from functools import reduce
 from glob import iglob
 from itertools import chain, islice
-from functools import reduce
 from math import sin, cos
 from typing import List
 
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import col, lit, udf, array, size
+from pyspark.sql.functions import udf, array, size
 
 from sp8tools import (in_degree, in_milli_meter, in_electron_volt, in_gauss, Hit, SpkHits,
-                      uniform_electric_field, none_field, ion_spectrometer, electron_spectrometer)
-
+                      uniform_electric_field, none_field, electron_spectrometer)
 
 # %% parser & parameters
 parser = ArgumentParser(prog='sp8export', description="""\
@@ -39,20 +38,53 @@ builder = (SparkSession
 
 
 # %% initialize spectrometers
+#
+#   ion2nd                 ion1st       electron
+# ┌───┐│                      │             │                    │┌───┐
+# │   ││                      │             │                    ││   │
+# │   ││                      │             │                    ││   │
+# │   ││                      │             │                    ││   │
+# │ion││                      │             │                    ││ele│
+# │mcp││        acc_reg       │   sep_reg   │     draft_reg      ││mcp│
+# │   ││                      │             │                    ││   │
+# │   ││                      │             │                    ││   │
+# │   ││                      │────x────────│                    ││   │
+# │   ││                      │             │                    ││   │
+# └───┘│                      │             │                    │└───┘
+#
+#                        uniform magnetic field
+#                       symbol x: reaction point
+#
+c = {
+    'draft_reg': 67.4,  # mm
+    'elesep_reg': 33,  # mm
+    'ionsep_reg': 16.5,  # mm
+    'acc_reg': 82.5,  # mm
+    'mcpgep_reg': 10,  # mm
+    'electron_epoten': -200,  # V
+    'ion1st_epoten': -285,  # V
+    'ion2nd_epoten': -2000,  # V
+    'ionmcp_epoten': -3200,  # V
+    'uniform_mfield': 6.843,  # Gauss
+}
 ion_acc = (
-    uniform_electric_field(length=in_milli_meter(10),
-                           electric_field=(in_electron_volt(-2000 - -3200) / in_milli_meter(10))) *
-    uniform_electric_field(length=in_milli_meter(82.5),
-                           electric_field=(in_electron_volt(-285 - -2000) / in_milli_meter(82.5))) *
-    uniform_electric_field(length=in_milli_meter(16.5),
-                           electric_field=(in_electron_volt(-200 - -285) / in_milli_meter(16.5 + 33)))
+        uniform_electric_field(length=in_milli_meter(c['mcpgep_reg']),
+                               electric_field=(in_electron_volt(c['ion2nd_epoten'] - c['ionmcp_epoten'])
+                                               / in_milli_meter(c['mcpgep_reg']))) *
+        uniform_electric_field(length=in_milli_meter(c['acc_reg']),
+                               electric_field=(in_electron_volt(c['ion1st_epoten'] - c['ion2nd_epoten'])
+                                               / in_milli_meter(c['acc_reg']))) *
+        uniform_electric_field(length=in_milli_meter(c['ionsep_reg']),
+                               electric_field=(in_electron_volt(c['electron_epoten'] - c['ion1st_epoten'])
+                                               / in_milli_meter(c['ionsep_reg'] + c['elesep_reg'])))
 )
 ele_acc = (
-    none_field(length=in_milli_meter(67.4)) *
-    uniform_electric_field(length=in_milli_meter(33),
-                           electric_field=(in_electron_volt(-285 - -200) / in_milli_meter(16.5 + 33)))
+        none_field(length=in_milli_meter(c['draft_reg'])) *
+        uniform_electric_field(length=in_milli_meter(c['elesep_reg']),
+                               electric_field=(in_electron_volt(c['ion1st_epoten'] - c['electron_epoten'])
+                                               / in_milli_meter(c['ionsep_reg'] + c['elesep_reg'])))
 )
-ele_spt = electron_spectrometer(ele_acc, magnetic_filed=in_gauss(6.843))
+ele_spt = electron_spectrometer(ele_acc, magnetic_filed=in_gauss(c['uniform_mfield']))
 
 
 # %% spark udfs
