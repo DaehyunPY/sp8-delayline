@@ -1,55 +1,15 @@
-from typing import Callable, Optional, NewType, NamedTuple
+from typing import Callable, Optional, NamedTuple
 
 from numpy import linspace, vectorize, log, pi, sin, array, float64
 from scipy.optimize import curve_fit
 from numba import jit
 
 from .others import rot_mat
-from .units import to_atomic_mass, to_nano_sec, to_electron_volt, in_milli_meter, in_nano_sec
+from .units import to_atomic_mass, to_nano_sec, to_electron_volt
+from .hittypes import Hit, AnalyzedHit, Model
 
 
-__all__ = ('Hit', 'none_field', 'uniform_electric_field', 'ion_spectrometer', 'electron_spectrometer')
-
-
-class Hit(NamedTuple):
-    """
-    Defines a set of detected time, position x and y
-    """
-    t: float
-    x: float
-    y: float
-
-    @staticmethod
-    def in_experimental_units(t: float, x: float, y: float) -> 'Hit':
-        """
-        Initialize `Hit` in the experimental units: 'ns' for `t`, and 'mm' for `x` and `y`
-        :param t: flight time
-        :param x: detected x position
-        :param y: detected y position
-        :return: `Hit`
-        """
-        return Hit(t=in_nano_sec(t), x=in_milli_meter(x), y=in_milli_meter(y))
-
-
-class AnalyzedHit(NamedTuple):
-    """
-    Defines a set of kinetic energy and momentum which are analyzed by a Model
-    """
-    px: float
-    py: float
-    pz: float
-    ke: float
-
-    def to_experimental_units(self) -> dict:
-        """
-        Return momentum and kinetic energy converted to the experimental units: 'au' for momentums `px`, `py` and `pz`,
-        and 'eV' for kinetic energy `ke`
-        :return: `dict`
-        """
-        return {'px': self.px, 'py': self.py, 'pz': self.pz, 'ke': to_electron_volt(self.ke)}
-
-
-Model = NewType('Model', Callable[[Hit], Optional[AnalyzedHit]])
+__all__ = ('none_field', 'uniform_electric_field', 'ion_spectrometer', 'electron_spectrometer')
 
 
 class Accelerated(NamedTuple):
@@ -79,7 +39,6 @@ class Accelerator:
         :param other: an Accelerator
         :return: composed Accelerator
         """
-
         def accelerate(initial_momentum, **kwargs) -> Optional[Accelerated]:
             acc0 = other(initial_momentum, **kwargs)
             if acc0 is None:
@@ -89,7 +48,6 @@ class Accelerator:
                 return None
             return Accelerated(accelerated_momentum=acc1.accelerated_momentum,
                                flight_time=acc0.flight_time + acc1.flight_time)
-
         return Accelerator(accelerate)
 
 
@@ -104,7 +62,6 @@ def none_field(length: float) -> Accelerator:
         if mass <= 0:
             return None
         return Accelerated(accelerated_momentum=initial_momentum, flight_time=length / initial_momentum * mass)
-
     return accelerator
 
 
@@ -126,7 +83,6 @@ def uniform_electric_field(length: float, electric_field: float) -> Accelerator:
         p = (2 * ke * mass) ** 0.5
         t = (p - initial_momentum) / electric_field / charge
         return Accelerated(accelerated_momentum=p, flight_time=t)
-
     return accelerator
 
 
