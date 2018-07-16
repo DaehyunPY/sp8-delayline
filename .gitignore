@@ -5,3 +5,4 @@ dev*
 playground*
 .idea
 __pycache__
+*.pyc

@@ -11,5 +11,5 @@ setup(
     license='MIT',
     packages=['dltools'],
     py_modules=['sp8tools'],
-    install_requires=['numpy', 'scipy', 'numba', 'pyspark', 'distributed'],
+    install_requires=['numpy', 'scipy', 'numba', 'pyspark'],
 )
