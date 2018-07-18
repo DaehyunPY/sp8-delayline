@@ -10,6 +10,5 @@ setup(
     long_description=open('README.md').read(),
     license='MIT',
     packages=['dltools'],
-    py_modules=['sp8tools'],
     install_requires=['numpy', 'scipy', 'numba', 'pyspark'],
 )
