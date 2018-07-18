@@ -6,3 +6,5 @@ playground*
 .idea
 __pycache__
 *.pyc
+*.csv
+*.parquet
