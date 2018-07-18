@@ -8,7 +8,8 @@ RUN dnf update -y \
     && dnf clean all
 
 WORKDIR /app
-ENV LANG=en_US.UTF-8
+ENV LANG=en_US.UTF-8 \
+    PYSPARK_PYTHON=/usr/bin/python3
 COPY Pipfile Pipfile.lock /app/
 RUN pipenv --python /usr/bin/python3 --site-packages \
     && pipenv install
