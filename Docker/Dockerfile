@@ -2,7 +2,7 @@ FROM fedora
 LABEL maintainer="Daehyun You <daehyun@dc.tohoku.ac.jp>"
 
 RUN dnf update -y \
-    && dnf install -y which python3 pipenv \
+    && dnf install -y which git python3 pipenv \
                       python3-root python3-jupyroot python3-jsmva \
                       java \
     && dnf clean all
@@ -10,10 +10,10 @@ RUN dnf update -y \
 WORKDIR /app
 ENV LANG=en_US.UTF-8 \
     PYSPARK_PYTHON=/usr/bin/python3
-COPY Pipfile Pipfile.lock donothing.py /app/
+COPY Pipfile Pipfile.lock install_spark_packages.py /app/
 RUN pipenv --python /usr/bin/python3 --site-packages \
     && pipenv install \
-    && spark-submit --packages "org.diana-hep:spark-root_2.11:0.1.15" donothing.py
+    && pipenv run /app/install_spark_packages.py
 
 ENTRYPOINT [ "pipenv", "run" ]
 CMD [ "python" ]

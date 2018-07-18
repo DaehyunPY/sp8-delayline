@@ -8,6 +8,8 @@ numpy = "*"
 scipy = "*"
 numba = "*"
 pyspark = "*"
+matplotlib = "*"
+"sp8-delayline" = {editable = true, git = "https://github.com/DaehyunPY/sp8-delayline.git"}
 
 [dev-packages]
 
