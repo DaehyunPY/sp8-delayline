@@ -10,9 +10,10 @@ RUN dnf update -y \
 WORKDIR /app
 ENV LANG=en_US.UTF-8 \
     PYSPARK_PYTHON=/usr/bin/python3
-COPY Pipfile Pipfile.lock /app/
+COPY Pipfile Pipfile.lock donothing.py /app/
 RUN pipenv --python /usr/bin/python3 --site-packages \
-    && pipenv install
+    && pipenv install \
+    && spark-submit --packages "org.diana-hep:spark-root_2.11:0.1.15" donothing.py
 
 ENTRYPOINT [ "pipenv", "run" ]
 CMD [ "python" ]
