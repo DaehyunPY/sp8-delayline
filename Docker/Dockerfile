@@ -2,7 +2,9 @@ FROM fedora
 LABEL maintainer="Daehyun You <daehyun@dc.tohoku.ac.jp>"
 
 RUN dnf update -y \
-    && dnf install -y which python3 pipenv python3-root python3-jupyroot python3-jsmva \
+    && dnf install -y which python3 pipenv \
+                      python3-root python3-jupyroot python3-jsmva \
+                      java \
     && dnf clean all
 
 WORKDIR /app
