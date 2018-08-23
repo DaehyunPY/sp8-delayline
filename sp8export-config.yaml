@@ -1,0 +1,92 @@
+target_files:
+  - /Volumes/analysis/SPring-8/2017B/29_CH2BrI_665eV_all/resort_ahmad/ResortLess*.root
+save_as: exported.parquet
+
+spectrometer:
+  #
+  #   ion2nd                 ion1st       electron
+  # ┌───┐│                      │             │                    │┌───┐
+  # │   ││                      │             │                    ││   │
+  # │   ││                      │             │                    ││   │
+  # │   ││                      │             │                    ││   │
+  # │ion││                      │             │                    ││ele│
+  # │mcp││        acc_reg       │   sep_reg   │     draft_reg      ││mcp│
+  # │   ││                      │             │                    ││   │
+  # │   ││                      │             │                    ││   │
+  # │   ││                      │────x────────│                    ││   │
+  # │   ││                      │             │                    ││   │
+  # └───┘│                      │             │                    │└───┘
+  #
+  #                        uniform magnetic field
+  #                       symbol x: reaction point
+  #
+  draft_reg: 67.4  # mm
+  elesep_reg: 33  # mm
+  ionsep_reg: 16.5  # mm
+  acc_reg: 82.5  # mm
+  mcpgep_reg: 10  # mm
+  electron_epoten: -200  # V
+  ion1st_epoten: -350  # V
+  ion2nd_epoten: -2000  # V
+  ionmcp_epoten: -3590  # V
+  uniform_mfield: 6.87  # Gauss
+
+ion:
+  # ((x,y) * rot(th) - (x0,y0)) * (dx,dy) + (x1,y1)
+  t0: -134.6925  # ns
+  x0: 0.493202  # mm
+  y0: -1.827212  # mm
+  dx: 1.22
+  dy: 1.22
+  dead_flag: 14
+  dead_time: 10000  # ns
+
+ion_momemtum_calculator:
+  H_1:
+    fr: 300  # ns
+    to: 1000  # ns
+    mass: 1  # u
+    charge: 1  # au
+    safe_pz_range: 200  # au
+    x1: 0  # mm
+    y1: 0  # mm
+  C_1:
+    fr: 300  # ns
+    to: 1000  # ns
+    mass: 12.0107  # u
+    charge: 1  # au
+    safe_pz_range: 400  # au
+    x1: 0  # mm
+    y1: 0  # mm
+  Br_1:
+    fr: 300  # ns
+    to: 1000  # ns
+    mass: 79.904  # u
+    charge: 1  # au
+    safe_pz_range: 400  # au
+    x1: 0  # mm
+    y1: 0  # mm
+  I_1:
+    fr: 300  # ns
+    to: 1000  # ns
+    mass: 126.90447  # u
+    charge: 1  # au
+    safe_pz_range: 400  # au
+    x1: 0  # mm
+    y1: 0  # mm
+
+electron:
+  # ((x,y) * rot(th) - (x0,y0)) * (dx,dy) + (x1,y1)
+  t0: -168.921  # ns
+  th: -30  # deg
+  x0: -1.5818  # mm
+  y0: 0.51687  # mm
+  dx: 1.64
+  dy: 1.63
+  dead_flag: 14
+  dead_time: 60  # ns
+
+electron_momemtum_calculator:
+  fr: 15  # ns
+  to: 30  # ns
+  safe_pz_range: 2  # au
