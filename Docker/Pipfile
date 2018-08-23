@@ -6,14 +6,16 @@ name = "pypi"
 [packages]
 pyyaml = "*"
 numpy = "*"
+pandas = "*"
 scipy = "*"
 numba = "*"
 pyspark = "*"
 matplotlib = "*"
 "sp8-delayline" = {editable = true, git = "https://github.com/DaehyunPY/sp8-delayline.git"}
+jupyter = "*"
+ipython = "*"
 
 [dev-packages]
-ipython = "*"
 
 [requires]
 python_version = "3.6"

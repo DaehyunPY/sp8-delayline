@@ -1,0 +1,7 @@
+version: '3'
+services:
+  interpreter:
+    build: ./Docker
+    image: daehyunpy/sp8-delayline
+    volumes:
+      - /Volumes/Data:/Volumes/Data
