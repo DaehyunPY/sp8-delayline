@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-
-
-# %% import
 from functools import reduce
 from glob import iglob
 from itertools import islice, chain
@@ -27,7 +24,9 @@ if __name__ == '__main__':
         config = safe_load(f)
 
     target_files = config['target_files']
-    save_as = config['save_as']
+    save_as = config.get('save_as', 'exported.parquet')
+    nparts = config.get('repartiton', None)
+    c_spk = config['spark']
     c_spt = config['spectrometer']
     c_ion = config['ion']
     c_ionp = config['ion_momemtum_calculator']
@@ -38,13 +37,11 @@ if __name__ == '__main__':
     # %% initialize spark builder
     builder = (SparkSession
                .builder
-               .appName('PySpark Example')
+               .appName("sp8export")
                .config("spark.jars.packages", "org.diana-hep:spark-root_2.11:0.1.15")
-               .config("spark.cores.max", 11)
-               .config("spark.executor.cores", 5)
-               .config("spark.executor.memory", "4g")
                )
-    # spark = builder.getOrCreate()
+    for k, v in c_spk.items():
+        builder.config(k, v)
 
 
     # %% initialize spectrometers
@@ -149,11 +146,12 @@ if __name__ == '__main__':
                     .filter(0 < size('ihits'))
                     .withColumn('ehits', analyse_ehits('ehits'))
                     .filter(0 < size('ehits'))
-                    # .cache()
                     )
-
-        (analyzed
+        if nparts is None:
+            repartitioned = analyzed
+        else:
+            repartitioned = analyzed.repartition(nparts)
+        (repartitioned
          .write
-         .option("maxRecordsPerFile", 10000)  # less than 10 MB assuming a record of 1 KB,
          .parquet(save_as)
          )

@@ -14,6 +14,7 @@ COPY Pipfile Pipfile.lock install_spark_packages.py /app/
 RUN python3 -m pip install pipenv \
     && pipenv --python /usr/bin/python3 --site-packages \
     && pipenv install \
+    && pipenv install --dev \
     && pipenv run /app/install_spark_packages.py \
     && rm -fr /root/.cache
 
