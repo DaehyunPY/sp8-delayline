@@ -39,7 +39,6 @@ if __name__ == '__main__':
     # %% initialize spark builder
     builder = (SparkSession
                .builder
-               .appName("sp8export")
                .config("spark.jars.packages", "org.diana-hep:spark-root_2.11:0.1.15")
                )
     for k, v in c_spk.items():
@@ -96,8 +95,7 @@ if __name__ == '__main__':
         return list(islice(zipped, nhits))
 
     def analyse_hits(hits: List[dict],
-                     th=0, t0=0, x0=0, y0=0, dx=1, dy=1, x1=0, y1=0,
-                     dead_flag=20, dead_time=nan,
+                     th=0, t0=0, x0=0, y0=0, dx=1, dy=1, x1=0, y1=0, dead_time=nan,
                      targets: dict = None) -> List[dict]:
         """
         :param targets: Momentum calculator. Example:
@@ -117,9 +115,10 @@ if __name__ == '__main__':
         notdead = [{'t': h['t'] - t0,
                     'x': dx * (cos(thr) * h['x'] - sin(thr) * h['y'] - x0),
                     'y': dy * (sin(thr) * h['x'] + cos(thr) * h['y'] - y0),
+                    'flag': h['flag'],
                     'as': {},
                     } for h in hits
-                   if (h['flag'] <= dead_flag) and (0 < h['t'] - t0 < dead_time)]
+                   if 0 < h['t'] - t0 < dead_time]
         if targets is None:
             return notdead
         for h in notdead:

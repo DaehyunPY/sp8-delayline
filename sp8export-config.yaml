@@ -45,7 +45,6 @@ ions:
   y0: -1.827212  # mm
   dx: 1.22
   dy: 1.22
-  dead_flag: 14  # flags lager than the value are dead
   dead_time: 10000  # ns
 
 ion_momemtum_calculator:
@@ -90,7 +89,6 @@ electrons:
   y0: 0.51687  # mm
   dx: 1.64
   dy: 1.63
-  dead_flag: 14  # flags lager than the value are dead
   dead_time: 60  # ns
 
 electron_momemtum_calculator:
