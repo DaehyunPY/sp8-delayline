@@ -18,5 +18,6 @@ RUN python3 -m pip install pipenv \
     && pipenv run /app/install_spark_packages.py \
     && rm -fr /root/.cache
 
+EXPOSE 4040 8888
 ENTRYPOINT [ "pipenv", "run" ]
 CMD [ "python" ]

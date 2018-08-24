@@ -3,5 +3,8 @@ services:
   interpreter:
     build: ./Docker
     image: daehyunpy/sp8-delayline
+    ports:
+      - 4040
+      - 8888
     volumes:
       - /Volumes:/Volumes

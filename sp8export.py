@@ -2,12 +2,12 @@
 # %% external dependencies
 from os import chdir
 from os.path import dirname
-from functools import reduce, partial
-from glob import iglob
-from itertools import islice, chain
-from math import sin, cos, nan
 from typing import List
+from glob import iglob
+from math import sin, cos, nan
 from argparse import ArgumentParser
+from functools import reduce, partial
+from itertools import islice, chain
 
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import udf, array, size
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     with open(args.config, 'r') as f:
         config = safe_load(f)
     chdir(dirname(args.config))
-    target_files = config['target_files']
+    target_files = config.get('target_files', ['*.root'])
     save_as = config.get('save_as', 'exported.parquet')
     c_spk = config.get('spark', {})
     c_spt = config['spectrometer']
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                                          safe_pz_range=c_elep['safe_pz_range'])}
     }
 
-    # %% spark udfs
+    # %% functions
     @udf(SpkHits)
     def combine_hits(tarr: List[float],
                      xarr: List[float],
@@ -136,8 +136,9 @@ if __name__ == '__main__':
 
     # %% connect to spark master & read root files
     with builder.getOrCreate() as spark:
-        globbed = chain.from_iterable(iglob(f) for f in target_files)
-        loaded = (spark.read.format("org.dianahep.sparkroot").load(fn) for fn in globbed)
+        globbed = chain.from_iterable(iglob(patt) for patt in target_files)
+        uniques = sorted(set(globbed))
+        loaded = (spark.read.format("org.dianahep.sparkroot").load(f) for f in uniques)
         df = reduce(DataFrame.union, loaded)
 
         # %% restructure data

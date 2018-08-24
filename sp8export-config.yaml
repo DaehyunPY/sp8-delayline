@@ -1,9 +1,10 @@
 target_files:
-  - /Volumes/analysis/SPring-8/2017B/29_CH2BrI_665eV_all/resort_ahmad/ResortLess*.root
+  - ResortLess*.root
 
 save_as: exported.parquet
 
 spark:
+  # spark.driver.memory: 2g
   # spark.cores.max: 10
   spark.executor.cores: 5
   spark.executor.memory: 4g
