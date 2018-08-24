@@ -3,8 +3,6 @@ target_files:
 
 save_as: exported.parquet
 
-repartiton: 128
-
 spark:
   # spark.cores.max: 10
   spark.executor.cores: 5
@@ -39,14 +37,14 @@ spectrometer:
   ionmcp_epoten: -3590  # V
   uniform_mfield: 6.87  # Gauss
 
-ion:
+ions:
   # ((x,y) * rot(th) - (x0,y0)) * (dx,dy) + (x1,y1)
   t0: -134.6925  # ns
   x0: 0.493202  # mm
   y0: -1.827212  # mm
   dx: 1.22
   dy: 1.22
-  dead_flag: 14
+  dead_flag: 14  # flags lager than the value are dead
   dead_time: 10000  # ns
 
 ion_momemtum_calculator:
@@ -83,7 +81,7 @@ ion_momemtum_calculator:
     x1: 0  # mm
     y1: 0  # mm
 
-electron:
+electrons:
   # ((x,y) * rot(th) - (x0,y0)) * (dx,dy) + (x1,y1)
   t0: -168.921  # ns
   th: -30  # deg
@@ -91,7 +89,7 @@ electron:
   y0: 0.51687  # mm
   dx: 1.64
   dy: 1.63
-  dead_flag: 14
+  dead_flag: 14  # flags lager than the value are dead
   dead_time: 60  # ns
 
 electron_momemtum_calculator:

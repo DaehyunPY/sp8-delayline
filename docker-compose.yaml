@@ -4,4 +4,4 @@ services:
     build: ./Docker
     image: daehyunpy/sp8-delayline
     volumes:
-      - /Volumes/Data:/Volumes/Data
+      - /Volumes:/Volumes

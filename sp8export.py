@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-from functools import reduce
+# %% external dependencies
+from os import chdir
+from os.path import dirname
+from functools import reduce, partial
 from glob import iglob
 from itertools import islice, chain
-from math import sin, cos
+from math import sin, cos, nan
 from typing import List
-from sys import argv
+from argparse import ArgumentParser
 
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import udf, array, size
@@ -14,25 +17,24 @@ from dltools import (in_degree, in_milli_meter, in_electron_volt, in_gauss, in_a
                      uniform_electric_field, none_field, ion_spectrometer, electron_spectrometer)
 
 
-if __name__ == '__main__':
-    # %% read config
-    if len(argv) == 1:
-        raise ValueError("Usage: program config")
-    elif 2 < len(argv):
-        raise ValueError("Too many arguments!: '{}'".format(argv[1:]))
-    with open(argv[1], 'r') as f:
-        config = safe_load(f)
+# %% parser & parameters
+parser = ArgumentParser(prog='sp8export', description="Analyse SP8 resorted data and save as parquet format.")
+parser.add_argument('config', type=str, default='config.yaml', nargs='?',
+                    help='config filename')
 
+if __name__ == '__main__':
+    args = parser.parse_args()
+    with open(args.config, 'r') as f:
+        config = safe_load(f)
+    chdir(dirname(args.config))
     target_files = config['target_files']
     save_as = config.get('save_as', 'exported.parquet')
-    nparts = config.get('repartiton', None)
-    c_spk = config['spark']
+    c_spk = config.get('spark', {})
     c_spt = config['spectrometer']
-    c_ion = config['ion']
+    c_ions = config['ions']
     c_ionp = config['ion_momemtum_calculator']
-    c_ele = config['electron']
+    c_eles = config['electrons']
     c_elep = config['electron_momemtum_calculator']
-
 
     # %% initialize spark builder
     builder = (SparkSession
@@ -42,7 +44,6 @@ if __name__ == '__main__':
                )
     for k, v in c_spk.items():
         builder.config(k, v)
-
 
     # %% initialize spectrometers
     ion_acc = (
@@ -63,11 +64,25 @@ if __name__ == '__main__':
                                                    / in_milli_meter(c_spt['ionsep_reg'] + c_spt['elesep_reg'])))
     )
     ion_spt = {
-        k: ion_spectrometer(ion_acc, mass=in_atomic_mass(d['mass']), charge=d['charge'], safe_pz_range=d['safe_pz_range'])
+        k: {'fr': d['fr'],
+            'to': d['to'],
+            'x1': d.get('x1', 0),
+            'y1': d.get('y1', 0),
+            'f': ion_spectrometer(ion_acc,
+                                  mass=in_atomic_mass(d['mass']),
+                                  charge=d['charge'],
+                                  safe_pz_range=d['safe_pz_range'])}
         for k, d in c_ionp.items()
     }
-    ele_spt = electron_spectrometer(ele_acc, magnetic_filed=in_gauss(c_spt['uniform_mfield']))
-
+    ele_spt = {
+        'e': {'fr': c_elep['fr'],
+              'to': c_elep['to'],
+              'x1': c_elep.get('x1', 0),
+              'y1': c_elep.get('y1', 0),
+              'f': electron_spectrometer(ele_acc,
+                                         magnetic_filed=in_gauss(c_spt['uniform_mfield']),
+                                         safe_pz_range=c_elep['safe_pz_range'])}
+    }
 
     # %% spark udfs
     @udf(SpkHits)
@@ -80,40 +95,44 @@ if __name__ == '__main__':
         zipped = ({'t': t, 'x': x, 'y': y, 'flag': f} for t, x, y, f in zip(tarr, xarr, yarr, flagarr))
         return list(islice(zipped, nhits))
 
-
-    @udf(SpkHits)
-    def analyse_ihits(hits: List[dict]) -> List[dict]:
-        notdead = ({'t': h['t'] - c_ion['t0'],
-                    'x': c_ion['dx'] * (h['x'] - c_ion['x0']),
-                    'y': c_ion['dy'] * (h['y'] - c_ion['y0']),
+    def analyse_hits(hits: List[dict],
+                     th=0, t0=0, x0=0, y0=0, dx=1, dy=1, x1=0, y1=0,
+                     dead_flag=20, dead_time=nan,
+                     targets: dict = None) -> List[dict]:
+        """
+        :param targets: Momentum calculator. Example:
+            targets = {
+                'C_1': {
+                    'fr': 300,  # ns
+                    'to':  1000,  # ns
+                    'mass': 12.0107,  # u
+                    'safe_pz_range': 400,  # au
+                    'x1': 0,  # mm
+                    'y1': 0,  # mm
+                }
+            }
+        :return: List of analyzed hits.
+        """
+        thr = in_degree(th)
+        notdead = [{'t': h['t'] - t0,
+                    'x': dx * (cos(thr) * h['x'] - sin(thr) * h['y'] - x0),
+                    'y': dy * (sin(thr) * h['x'] + cos(thr) * h['y'] - y0),
                     'as': {},
                     } for h in hits
-                   if (not c_ion['dead_flag'] < h['flag']) and (0 < (h['t'] - c_ion['t0']) < c_ion['dead_time']))
+                   if (h['flag'] <= dead_flag) and (0 < h['t'] - t0 < dead_time)]
+        if targets is None:
+            return notdead
         for h in notdead:
-            for k, d in c_ionp.items():
+            for k, d in targets.items():
                 if d['fr'] < h['t'] < d['to']:
-                    h['as'].update(**{k: ion_spt[k](Hit.in_experimental_units(t=h['t'],
-                                                                              x=h['x'] - d['x1'],
-                                                                              y=h['y'] - d['y1']))
-                                   .to_experimental_units()})
+                    h['as'][k] = (d['f'](Hit.in_experimental_units(t=h['t'],
+                                                                   x=h['x'] + d.get('x1', x1),
+                                                                   y=h['y'] + d.get('y1', y1)))
+                                  .to_experimental_units())
         return notdead
 
-
-    @udf(SpkHits)
-    def analyse_ehits(hits: List[dict]) -> List[dict]:
-        th = in_degree(c_ele['th'])
-        notdead = ({'t': h['t'] - c_ele['t0'],
-                    'x': c_ele['dx'] * (cos(th) * h['x'] - sin(th) * h['y'] - c_ele['x0']),
-                    'y': c_ele['dy'] * (sin(th) * h['x'] + cos(th) * h['y'] - c_ele['y0']),
-                    'as': {},
-                    } for h in hits
-                   if (not c_ele['dead_flag'] < h['flag']) and (0 < (h['t'] - c_ele['t0']) < c_ele['dead_time']))
-        for h in notdead:
-            if c_elep['fr'] < h['t'] < c_elep['to']:
-                h['as'].update(**{'e': ele_spt(Hit.in_experimental_units(t=h['t'], x=h['x'], y=h['y']))
-                               .to_experimental_units()})
-        return notdead
-
+    analyse_ihits = udf(partial(analyse_hits, targets=ion_spt, **c_ions), SpkHits)
+    analyse_ehits = udf(partial(analyse_hits, targets=ele_spt, **c_eles), SpkHits)
 
     # %% connect to spark master & read root files
     with builder.getOrCreate() as spark:
@@ -147,11 +166,7 @@ if __name__ == '__main__':
                     .withColumn('ehits', analyse_ehits('ehits'))
                     .filter(0 < size('ehits'))
                     )
-        if nparts is None:
-            repartitioned = analyzed
-        else:
-            repartitioned = analyzed.repartition(nparts)
-        (repartitioned
+        (analyzed
          .write
          .parquet(save_as)
          )
