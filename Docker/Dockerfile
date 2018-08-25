@@ -2,22 +2,25 @@ FROM fedora
 LABEL maintainer="Daehyun You <daehyun@dc.tohoku.ac.jp>"
 
 RUN dnf update -y \
-    && dnf install -y which git python3 java \
-                      python3-root python3-jupyroot python3-jsmva \
+    && dnf install -y \
+        java which git pipenv \
+        python3-root python3-jupyroot python3-jsmva \
     && dnf clean all
 
-WORKDIR /app
 ENV LANG=en_US.UTF-8 \
-    PIPENV_VENV_IN_PROJECT=true \
+    PATH=/root/.local/bin:$PATH \
     PYSPARK_PYTHON=/app/.venv/bin/python
-COPY Pipfile install_spark_packages.py /app/
-# todo: fix that --site-package flag is not working
-RUN python3 -m pip install --upgrade pipenv \
-    && pipenv --python /usr/bin/python3 --site-packages \
+COPY Pipfile Pipfile.lock install_spark_packages.py /app/
+WORKDIR /app
+# todo: fix --site-packages error
+RUN pip3 install --user --upgrade pipenv \
+    # && pipenv --three --site-packages \
+    && pipenv --three \
     && pipenv install \
     && pipenv install --dev \
     && pipenv run /app/install_spark_packages.py \
-    && rm -fr /root/.cache
+    && rm -fr /root/.cache \
+    && ln -s "$(pipenv --venv)" /app/.venv
 
 EXPOSE 4040 8888
 ENTRYPOINT [ "pipenv", "run" ]
