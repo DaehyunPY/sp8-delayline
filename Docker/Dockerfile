@@ -10,8 +10,8 @@ WORKDIR /app
 ENV LANG=en_US.UTF-8 \
     PIPENV_VENV_IN_PROJECT=true \
     PYSPARK_PYTHON=/app/.venv/bin/python
-COPY Pipfile Pipfile.lock install_spark_packages.py /app/
-RUN python3 -m pip install pipenv \
+COPY Pipfile install_spark_packages.py /app/
+RUN python3 -m pip install --upgrade pipenv \
     && pipenv --python /usr/bin/python3 --site-packages \
     && pipenv install \
     && pipenv install --dev \
