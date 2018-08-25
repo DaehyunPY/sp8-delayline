@@ -11,6 +11,7 @@ ENV LANG=en_US.UTF-8 \
     PIPENV_VENV_IN_PROJECT=true \
     PYSPARK_PYTHON=/app/.venv/bin/python
 COPY Pipfile install_spark_packages.py /app/
+# todo: fix that --site-package flag is not working
 RUN python3 -m pip install --upgrade pipenv \
     && pipenv --python /usr/bin/python3 --site-packages \
     && pipenv install \

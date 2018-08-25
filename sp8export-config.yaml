@@ -4,7 +4,7 @@ target_files:
 save_as: exported.parquet
 
 spark:
-  # spark.driver.memory: 2g
+  spark.driver.memory: 8g
   # spark.cores.max: 10
   spark.executor.cores: 5
   spark.executor.memory: 4g
