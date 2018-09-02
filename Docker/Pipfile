@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pyyaml = "*"
+numpy = "*"
+pandas = "*"
+scipy = "*"
+numba = "*"
+pyspark = "*"
+matplotlib = "*"
+altair = "*"
+ipython = "*"
+jupyterlab = "*"
+"sp8-delayline" = {git = "https://github.com/DaehyunPY/sp8-delayline.git"}
+
+[dev-packages]
+
+[requires]
+python_version = "3.6"
